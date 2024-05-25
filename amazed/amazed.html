@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: rgb(20, 20, 20);
+        }
+
+        #placer {
+            display: grid;
+            place-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="placer">
+        <canvas id="canvas" width=512 height=512 tabindex="0"></canvas>
+    </div>
+</body>
+
+<script type="module">
+    // Boilerplate code ///////////////////////////////////////////////////////
+    //
+    // This is code that, in the rt3d app, would be provided by the runtime.
+    // It is here to make the example self-contained.
+
+    // Import the glance library
+    import * as glance from '../glance/js/index.js';
+    import * as amazed from './amazed.js';
+
+    // Get the WebGL context
+    const gl = glance.getContext('canvas');
+
+    // Basic render loop wrapper.
+    function setRenderLoop(callback) {
+        function renderLoop(time) {
+            callback(time);
+            requestAnimationFrame(renderLoop);
+        }
+        requestAnimationFrame(renderLoop);
+    }
+
+    // Resize callback
+    let _resizeCallback = null;
+    canvas.addEventListener("resize", () => {
+        if (_resizeCallback)
+        {
+            _resizeCallback(canvas.clientWidth, canvas.clientHeight);
+        }
+    });
+    function onResize(callback) {
+        _resizeCallback = callback;
+        _resizeCallback(canvas.clientWidth, canvas.clientHeight);
+    }
+
+    function onMouseDrag(callback) {
+        let isDragging = false;
+
+        canvas.addEventListener('mousedown', () => {
+            isDragging = true;
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                callback(e);
+            }
+        });
+    }
+
+    function onMouseWheel(callback) {
+        canvas.addEventListener('wheel', (e) => {
+            callback(e);
+        });
+    }
+
+    // User code ///////////////////////////////////////////////////////////////
+    //
+    // This is the code that the user would write in the rt3d app.
+
+    // Vertex and fragment shader source code
+    const vertexShaderSource = `#version 300 es
+        precision highp float;
+
+        uniform mat4 u_modelMatrix;
+        uniform mat4 u_viewMatrix;
+        uniform mat4 u_projectionMatrix;
+
+        in vec3 a_pos;
+        in vec3 a_normal;
+        in vec2 a_texCoord;
+
+        out vec3 f_worldPos;
+        out vec3 f_normal;
+        out vec2 f_texCoord;
+
+        void main() {
+            vec4 worldPos = u_modelMatrix * vec4(a_pos, 1.0);
+            gl_Position = u_projectionMatrix * u_viewMatrix * worldPos;
+            f_worldPos = worldPos.xyz;
+            f_normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
+            f_texCoord = a_texCoord;
+        }
+    `;
+    const fragmentShaderSource = `#version 300 es
+        precision mediump float;
+
+        in vec3 f_worldPos;
+        in vec3 f_normal;
+
+        uniform float u_threshold1;
+        uniform float u_threshold2;
+
+        out vec4 o_fragColor;
+
+        void main() {
+            vec3 normal = normalize(f_normal);
+
+            // Define colors for the three z values
+            vec3 color1 = vec3(.3, .3, .7); // Color for the inset faces
+            vec3 color2 = vec3(.4, .4, .6); // Color for the inset walls
+            vec3 color3 = vec3(.6, .6, .8); // Color for the outer faces
+
+            // Determine the color based on f_worldPos.z
+            vec3 temp = f_worldPos * f_normal;
+            vec3 finalColor;
+            
+            if (temp.x + temp.y + temp.z <= u_threshold1) {
+                finalColor = color1;
+            } else if (temp.x + temp.y + temp.z < u_threshold2) {
+                finalColor = color2;
+            } else {
+                finalColor = color3;
+            }
+
+            // Set the final color output
+            o_fragColor = vec4(finalColor, 1.0);
+        }
+    `;
+
+    // Create the shader from the source code.
+    const boxShader = glance.createShader(
+        // glance strives to be a "functional" library, meaning that consists of
+        // (mostly) free functions. All objects that these functions operate on,
+        // like the `boxShader` variable that we declare here, are just plain
+        // JavaScript objects that can be inspected and modified by anone.
+        // This is why we have to pass the `gl` object to most functions.
+        gl,
+
+        // All glance objects have a name, which is used to identify them in the
+        // WebGL context. This is useful for debugging and error messages.
+        "my-shader",
+
+        // The source code of the vertex shader.
+        vertexShaderSource,
+
+        // The source code of the fragment shader.
+        fragmentShaderSource,
+
+        // Uniforms that are not expected to change can be defined to a constant
+        // here. You can still change them later. This is just a convenience.
+        // If you don't define them, they will be initialized with all zeroes,
+        // which is usually fine for floats, ints and vectors but for matrices
+        // it is usually not.
+        {
+            u_viewMatrix: glance.Mat4.fromTranslation(0, 0, -2),
+            u_projectionMatrix: glance.Mat4.perspective((60 / 180) * Math.PI, gl.canvas.width / gl.canvas.height, 0.1, 10),
+        },
+    );
+
+    // Create a box geometry object.
+    // This is a simple object with properties 'positions', 'normals', 'indices',
+    // 'texCoords',and 'tangents' that can be used to define the buffers.
+    const numberOfSegments = 10;
+    const cubeSize = 1;
+    const box = glance.createBox('box-geo', { width: cubeSize, height: cubeSize, depth: cubeSize, widthSegments: numberOfSegments, heightSegments: numberOfSegments, depthSegments: numberOfSegments });
+    // Faces to be inset: [cube face, row, column]
+    // const facesToInset = [[5, 1, 1], [4, 1, 1]]
+    const facesToInset = [
+        [5, 1, 3],
+        [5, 1, 4],
+        [5, 1, 5],
+        [5, 1, 6],
+        [5, 2, 2],
+        [5, 2, 3],
+        [5, 2, 6],
+        [5, 2, 7],
+        [5, 3, 2],
+        [5, 3, 7],
+        [5, 5, 3],
+        [5, 5, 6],
+        [5, 6, 3],
+        [5, 6, 6],
+        [5, 7, 3],
+        [5, 7, 6],
+    ];
+    amazed.insetFaces(box, numberOfSegments, cubeSize, facesToInset) 
+
+
+
+    // The IBO is the "Index Buffer Object" and contains the indices of the
+    // vertices that should be drawn.
+    const boxIBO = glance.createIndexBuffer(gl, box.indices);
+
+    // The ABO is the "Attribute Buffer Object", which contains the vertex data.
+    const boxABO = glance.createAttributeBuffer(gl,
+        // The name
+        'box-abo',
+
+        // A dictionary that maps attribute names to objects that contain the
+        // data and the height of the data. The height is the number of components
+        // per vertex. For example, a position has 3 components (x, y, z) and a
+        // texture coordinate has 2 components (u, v).
+        // The data of each attribute is just a flat array of numbers and is
+        // automatically interleaved by glance.
+        {   
+            a_pos: { data: box.positions, height: 3 },
+            a_normal: { data: box.normals, height: 3 },
+            a_texCoord: { data: box.texCoords, height: 2 },
+        },
+    );
+
+    // The VAO is the "Vertex Array Object" and contains the IBO and the ABO, as
+    // well as the mapping of the attributes to the shader.
+    const boxVAO = glance.createVAO(gl, 'box-vao',
+        // Indices
+        boxIBO,
+
+        // Produce a mapping of the attributes required by the `boxShader` to
+        // the attributes provided by the `boxABO`.
+        // If you have more than one ABO that you want to use for the same
+        // shader, you can pass an array of ABOs here and glance will figure
+        // out the mapping for you.
+        glance.buildAttributeMap(boxShader, boxABO)
+    );
+
+    // We load the texture asynchronously from a URL.
+    // This way, the code will stop here until the texture is loaded.
+    // This function takes a lot of optional parameters, by default we are using
+    // the highest quality settings for all of them.
+    // const boxTextureDiffuse = await glance.loadTextureNow(gl,
+    //     'https://echtzeit-computergrafik-ss24.github.io/img/polybox-diffuse.png'
+    // );
+
+    // The draw call is the object that contains all the information needed to
+    // draw the object. It can later be passed to the `performDrawCall` function.
+    // This function is mostly used for early error checking.
+    const boxDrawCall = glance.createDrawCall(gl,
+
+        // The shader to use for drawing.
+        boxShader,
+
+        // The VAO that contains the geometry to draw.
+        boxVAO,
+
+        // Optional parameters.
+        {
+            // Uniforms that are expected to change every frame can be defined here.
+            // Unlike the uniforms in the shader, these are functions that take the
+            // current time as an argument and return the value of the uniform.
+            // uniforms: {
+            //     u_modelMatrix: (time) => glance.Mat4.fromRotationY(time / 2000).rotateX(time / 1500),
+            // },
+
+            // Textures that are used in the shader can be defined here.
+            // Every texture is an array of two elements: the texture unit and
+            // the texture.
+            // textures: [
+            //     [0, boxTextureDiffuse],
+            // ],
+
+            // Additional information about the draw call, like culling, blending,
+            // depth testing, etc.
+            cullFace: gl.BACK,
+            depthTest: gl.LESS,
+        }
+    );
+
+    let pan = 0;
+    let tilt = 0;
+    let zoom = 3;
+
+    // get u_viewMatrix uniform location
+    const viewMatrixUniform = gl.getUniformLocation(boxShader.glObject, "u_viewMatrix");
+    const viewMatrix = glance.Mat4.fromTranslation(0, 0, -zoom);
+    const uThreshold1 = gl.getUniformLocation(boxShader.glObject, "u_threshold1");
+    const uThreshold2 = gl.getUniformLocation(boxShader.glObject, "u_threshold2");
+    gl.useProgram(boxShader.glObject);
+    gl.uniform1f(uThreshold1, cubeSize / 2 - cubeSize / numberOfSegments);
+    gl.uniform1f(uThreshold2, cubeSize / 2);
+    gl.uniformMatrix4fv(viewMatrixUniform, false, viewMatrix);
+
+    // This is the render loop. It is called every frame and is responsible for
+    // drawing the scene.
+    // The `time` parameter is the time in milliseconds since the page was loaded.
+    function render(time) {
+        // Clear the screen first.
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        // Update the view matrix
+        viewMatrix.reset();
+        viewMatrix.translateZ(-zoom);
+        viewMatrix.rotateX(tilt);
+        viewMatrix.rotateY(pan);
+        gl.useProgram(boxShader.glObject);
+        
+        gl.uniformMatrix4fv(viewMatrixUniform, false, viewMatrix);
+
+        // Perform the draw call.
+        // We need the time here to update the uniform callbacks.
+        glance.performDrawCall(gl, boxDrawCall, time);
+    }
+    // Start the render loop.
+    setRenderLoop(render);
+
+    onMouseDrag((e) =>
+    {
+        const cameraSpeed = 0.007;
+        const halfPi = Math.PI / 2;
+        pan += e.movementX * cameraSpeed;
+        tilt = glance.clamp(tilt + e.movementY * cameraSpeed, -halfPi, halfPi);
+    });
+
+    onMouseWheel((e) =>
+    {
+        const zoomSpeed = 0.2;
+        const minZoom = 1.5;
+        const maxZoom = 5;
+        zoom = glance.clamp(zoom * (1 + Math.sign(e.deltaY) * zoomSpeed), minZoom, maxZoom);
+    });
+
+    // This is an additional callback that is called whenever the canvas is resized.
+    onResize(() => {
+        // Update the size of the draw canvas to match the size of the canvas element.
+        gl.canvas.width = gl.canvas.offsetWidth;
+        gl.canvas.height = gl.canvas.offsetHeight;
+
+        // Update the WebGL viewport to match the new size.
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+        // Update the projection matrix in the shader.
+        // This could be abstracted into a glance.setShader() function, but in
+        // real code I rarely change the uniforms outside of a draw call.
+        // Also, you can see here that the `boxShader` object is just a plain
+        // JavaScript object, and you still have access to the "raw" WebGL
+        // objects through the `glObject` property.
+        gl.useProgram(boxShader.glObject);
+        const projectionUniform = gl.getUniformLocation(boxShader.glObject, 'u_projectionMatrix');
+        gl.uniformMatrix4fv(
+            projectionUniform,
+            false,
+            glance.Mat4.perspective((60 / 180) * Math.PI, gl.canvas.width / gl.canvas.height, 0.1, 10),
+        );
+    });
+
+    
+
+</script>
+
+</html>
