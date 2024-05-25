@@ -75,7 +75,6 @@ function insetFaces(box, numberOfSegments, size, faces) {
             const uvs = new Vec2(texCoords[2 * originalVertices[i]], texCoords[2 * originalVertices[i] + 1])
             texCoords.push(uvs.x, uvs.y)
         }
-        console.log(positions);
         // Replace original vertices by insetVertices
         const insetVertices = [length / 3, length / 3 + 1, length / 3 + 2]
         indices.splice(3 * triangleIndex, 3, insetVertices[0], insetVertices[1], insetVertices[2])
@@ -84,7 +83,7 @@ function insetFaces(box, numberOfSegments, size, faces) {
         return {originalVertices, insetVertices};
     }
 
-    function createWalls(topFaceVertices, bottomFaceVertices, indicesShift) {
+    function createWalls(topFaceVertices, bottomFaceVertices) {
         // TODO: normals facing the wrong way?
 
         // Create list of index tuples
@@ -106,8 +105,8 @@ function insetFaces(box, numberOfSegments, size, faces) {
 
             // Only draw the triangle if it is on the edge of inset vertices (not between two inset triangles)
             if (drawTriangle) {
-                indices.splice(indicesShift, 0, topFaceVertices[i], topFaceVertices[(i + 1) % 3], bottomFaceVertices[i])
-                indices.splice(indicesShift, 0, topFaceVertices[(i + 1) % 3], bottomFaceVertices[(i + 1) % 3], bottomFaceVertices[i])
+                indices.push(topFaceVertices[i], topFaceVertices[(i + 1) % 3], bottomFaceVertices[i])
+                indices.push(topFaceVertices[(i + 1) % 3], bottomFaceVertices[(i + 1) % 3], bottomFaceVertices[i])
             }
         }
     }
@@ -119,21 +118,15 @@ function insetFaces(box, numberOfSegments, size, faces) {
     // Create inset faces and remove original ones
     for (let i = 0; i < triangleIndices.length; i++) {
         const triangleIndex = triangleIndices[i];
-        const indicesLength = indices.length;
 
         // Store original and inset vertices
         const temp = insetFace(triangleIndex);
         originalVertices.push(temp.originalVertices);
         insetVertices.push(temp.insetVertices);
-
-        // Update the faces array to reflect the new indices
-        const diff = indices.length - indicesLength;
-        for (let j = 0; j < triangleIndices.length; j++) {
-            faces[j] += diff / 3;
-        }
     }
+    
     // Create walls at the edge of the inset faces
-    for (let i = 0; i < faces.length; i++) {
-        createWalls(originalVertices[i], insetVertices[i], faces.length * 3);
+    for (let i = 0; i < triangleIndices.length; i++) {
+        createWalls(originalVertices[i], insetVertices[i]);
     }
 }
