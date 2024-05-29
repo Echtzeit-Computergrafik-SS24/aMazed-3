@@ -193,13 +193,11 @@
     const cubeSize = 1;
     const box = glance.createBox('box-geo', { width: cubeSize, height: cubeSize, depth: cubeSize, widthSegments: numberOfSegments, heightSegments: numberOfSegments, depthSegments: numberOfSegments });
     // Faces to be inset: [cube face, row, column]
-    const laby = amazed.generateLabyrinth(numberOfSegments, "middle", "top");
+    const laby = amazed.generateLabyrinthCube(numberOfSegments);
     const facesToInset = [];
-    for (let i = 0; i < laby.length; i++) {
-        facesToInset.push([5, laby[i][0], laby[i][1]]);
-    }
 
-    amazed.insetFaces(box, numberOfSegments, cubeSize, facesToInset); 
+
+    amazed.insetFaces(box, numberOfSegments, cubeSize, laby); 
 
 
 
