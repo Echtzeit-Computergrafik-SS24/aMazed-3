@@ -175,19 +175,12 @@ function insetFaces(box, numberOfSegments, size, faces) {
 }
 
 function generateLabyrinthCube(segments) {
-  // const side0 = generateLabyrinth(segments, "top", "bottom");
-  // const side1 = generateLabyrinth(segments, "bottom", "right");
-  // const side2 = generateLabyrinth(segments, "left", "right");
-  // const side3 = generateLabyrinth(segments, "bottom", "left");
-  // const side4 = generateLabyrinth(segments, "left", "middle");
-  // const side5 = generateLabyrinth(segments, "middle", "top");
-
-  const side0 = generateLabyrinth(segments, "bottom", "top");
-  const side1 = generateLabyrinth(segments, "bottom", "top");
-  const side2 = generateLabyrinth(segments, "bottom", "top");
-  const side3 = generateLabyrinth(segments, "bottom", "top");
-  const side4 = generateLabyrinth(segments, "middle", "bottom");
-  const side5 = generateLabyrinth(segments, "middle", "bottom");
+  const side0 = generateLabyrinth(segments, "top", "bottom");
+  const side1 = generateLabyrinth(segments, "bottom", "right");
+  const side2 = generateLabyrinth(segments, "left", "right");
+  const side3 = generateLabyrinth(segments, "bottom", "left");
+  const side4 = generateLabyrinth(segments, "left", "middle");
+  const side5 = generateLabyrinth(segments, "middle", "top");
   return [side0, side1, side2, side3, side4, side5];
 
   function generateLabyrinth(segments, startPosition, endPosition) {
