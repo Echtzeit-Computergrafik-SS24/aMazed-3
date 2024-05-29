@@ -171,12 +171,25 @@ function insetFaces(box, numberOfSegments, size, faces) {
   }
 }
 
-function generateLabyrinth(segments) {
+function generateLabyrinth(segments, startPosition, endPosition) {
   const width = (segments / 2) | 0;
 
   // TODO: start can be either on the left wall or in the middle
-  let startX = 0;
-  let startY = width / 2;
+  let points;
+  let startPoint;
+  let endPoint;
+  let entryPoint;
+  let exitPoint;
+
+  points = getPoints(startPosition);
+  startPoint = points[0];
+  entryPoint = points[1];
+
+  points = getPoints(endPosition);
+  console.log(points)
+  endPoint = points[0];
+  exitPoint = points[1];
+
   const endX = width - 1;
   const endY = width / 2;
   let route;
@@ -190,6 +203,36 @@ function generateLabyrinth(segments) {
   ];
 
   init();
+  loop();
+  return arrayToCoordinates(labyrinthArray);
+
+  function getPoints(position) {
+    let point;
+    let wallPoint;
+    switch (position) {
+      case "left":
+        point = [0.5, width / 2];
+        wallPoint = [0, width / 2];
+        console.log(point, wallPoint);
+        return [point, wallPoint];
+      case "middle":
+        point = [width / 2, width / 2];
+        wallPoint = point;
+        return [point, wallPoint];
+      case "top":
+        point = [width / 2, 0.5];
+        wallPoint = [width / 2, 0];
+        return [point, wallPoint];
+      case "bottom":
+        point = [width / 2, width - 0.5];
+        wallPoint = [width / 2, width];
+        return [point, wallPoint];
+      case "right":
+        point = [width - 0.5, width / 2];
+        wallPoint = [width, width / 2];
+        return [point, wallPoint];
+    }
+  }
 
   function init() {
     route = [];
@@ -203,26 +246,29 @@ function generateLabyrinth(segments) {
       }
     }
 
-    labyrinthArray[startY * 2][startX * 2 + 1] = 1; // Mark the start position as path
-    route = [[startX, startY]];
+    labyrinthArray[startPoint[1] * 2][startPoint[0] * 2] = 1; // Mark the start position as path
+    route = [startPoint];
 
     // Create entry and exit points
-    labyrinthArray[startY * 2][startX * 2] = 1;
-    labyrinthArray[endY * 2][endX * 2 + 2] = 1;
+    labyrinthArray[entryPoint[1] * 2][entryPoint[0] * 2] = 1;
+    labyrinthArray[exitPoint[1] * 2][exitPoint[0] * 2] = 1;
   }
 
   function loop() {
     while (true) {
       const alternatives = [];
 
-      startX = route[route.length - 1][0] | 0;
-      startY = route[route.length - 1][1] | 0;
+      startPoint = [
+        route[route.length - 1][0] | 0,
+        route[route.length - 1][1] | 0,
+      ];
 
       for (let i = 0; i < directions.length; i++) {
         if (
-          labyrinthArray[(directions[i][1] + startY) * 2 + 1] != undefined &&
-          labyrinthArray[(directions[i][1] + startY) * 2 + 1][
-            (directions[i][0] + startX) * 2 + 1
+          labyrinthArray[(directions[i][1] + startPoint[1]) * 2 + 1] !=
+            undefined &&
+          labyrinthArray[(directions[i][1] + startPoint[1]) * 2 + 1][
+            (directions[i][0] + startPoint[0]) * 2 + 1
           ] === 0
         ) {
           alternatives.push(directions[i]);
@@ -232,7 +278,7 @@ function generateLabyrinth(segments) {
       if (alternatives.length === 0) {
         route.pop();
         if (route.length === 0) {
-          if (labyrinthArray[endY * 2][endX * 2 + 1] === 0) {
+          if (labyrinthArray[endPoint[1] * 2][endPoint[0] * 2] === 0) {
             // Start again if end point is not connected
             init();
             loop();
@@ -244,17 +290,16 @@ function generateLabyrinth(segments) {
 
       const direction = alternatives[(Math.random() * alternatives.length) | 0];
 
-      route.push([direction[0] + startX, direction[1] + startY]);
+      route.push([direction[0] + startPoint[0], direction[1] + startPoint[1]]);
 
-      labyrinthArray[(direction[1] + startY) * 2 + 1][
-        (direction[0] + startX) * 2 + 1
+      labyrinthArray[(direction[1] + startPoint[1]) * 2 + 1][
+        (direction[0] + startPoint[0]) * 2 + 1
       ] = 1; // Mark the path in labyrinthArray
-      labyrinthArray[direction[1] + startY * 2 + 1][
-        direction[0] + startX * 2 + 1
+      labyrinthArray[direction[1] + startPoint[1] * 2 + 1][
+        direction[0] + startPoint[0] * 2 + 1
       ] = 1; // Mark the current cell as part of the path
     }
   }
-  loop();
 
   function arrayToCoordinates(array) {
     const coordinates = [];
@@ -267,7 +312,6 @@ function generateLabyrinth(segments) {
     }
     return coordinates;
   }
-  return arrayToCoordinates(labyrinthArray);
 }
 
 // TODO: entry in middle

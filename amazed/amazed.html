@@ -189,11 +189,11 @@
     // Create a box geometry object.
     // This is a simple object with properties 'positions', 'normals', 'indices',
     // 'texCoords',and 'tangents' that can be used to define the buffers.
-    const numberOfSegments = 11; // needs to be uneven
+    const numberOfSegments = 21; // needs to be uneven
     const cubeSize = 1;
     const box = glance.createBox('box-geo', { width: cubeSize, height: cubeSize, depth: cubeSize, widthSegments: numberOfSegments, heightSegments: numberOfSegments, depthSegments: numberOfSegments });
     // Faces to be inset: [cube face, row, column]
-    const laby = amazed.generateLabyrinth(numberOfSegments);
+    const laby = amazed.generateLabyrinth(numberOfSegments, "middle", "top");
     const facesToInset = [];
     for (let i = 0; i < laby.length; i++) {
         facesToInset.push([5, laby[i][0], laby[i][1]]);
