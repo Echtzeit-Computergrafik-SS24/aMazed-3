@@ -192,12 +192,9 @@
     const numberOfSegments = 21; // needs to be uneven
     const cubeSize = 1;
     const box = glance.createBox('box-geo', { width: cubeSize, height: cubeSize, depth: cubeSize, widthSegments: numberOfSegments, heightSegments: numberOfSegments, depthSegments: numberOfSegments });
-    // Faces to be inset: [cube face, row, column]
-    const laby = amazed.generateLabyrinthCube(numberOfSegments);
-    const facesToInset = [];
+    const labyrinth = amazed.generateLabyrinthCube(numberOfSegments);
 
-
-    amazed.insetFaces(box, numberOfSegments, cubeSize, laby); 
+    amazed.insetFaces(box, numberOfSegments, cubeSize, labyrinth); 
 
 
 
