@@ -143,12 +143,12 @@
             vec3 temp = f_worldPos * f_normal;
             vec3 finalColor;
             
-            if (temp.x + temp.y + temp.z <= u_threshold1) {
+            if (temp.x + temp.y + temp.z == u_threshold1) {
                 finalColor = color1;
-            } else if (temp.x + temp.y + temp.z < u_threshold2) {
-                finalColor = color2;
-            } else {
+            } else if (temp.x + temp.y + temp.z == u_threshold2) {
                 finalColor = color3;
+            } else {
+                finalColor = color2;
             }
 
             // Set the final color output
