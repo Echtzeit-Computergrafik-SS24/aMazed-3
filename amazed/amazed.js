@@ -1,40 +1,46 @@
-import { Vec2, Vec3 } from "../glance/js/math/index.js";
+import { Vec3 } from "../glance/js/math/index.js";
 export { insetFaces, generateLabyrinthCube };
 
 function insetFaces(box, numberOfSegments, size, faces) {
-  const positions = box.positions;
-  const indices = box.indices;
-  const texCoords = box.texCoords;
-  const normals = box.normals;
-
+  // Initialize variables
+  const { positions, indices, texCoords, normals } = box;
   const insetDepth = size / numberOfSegments;
-
   const originalVerticesArray = [];
   const insetVerticesArray = [];
 
+    // Get triangle indices from array of faces to be inset
+    const triangleIndices = getTriangleIndices();
+
+    // Inset the faces
+    for (let i = 0; i < triangleIndices.length; i++) {
+      insetTriangle(triangleIndices[i]);
+    }
+  
+    // Create walls at the edge of the inset faces
+    for (let i = 0; i < insetVerticesArray.length; i++) {
+      createWalls(originalVerticesArray[i], insetVerticesArray[i]);
+    }
+
   function getTriangleIndices() {
     const triangleIndices = [];
-    let triangleIndex;
     const numberTrianglesOneSide = numberOfSegments ** 2 * 2;
-    for (let i = 0; i < faces.length; i++) {
-      for (let j = 0; j < faces[i].length; j++) {
-        triangleIndex =
-          numberTrianglesOneSide * i +
-          faces[i][j][0] * 2 +
-          (numberOfSegments - 1 - faces[i][j][1]) * numberOfSegments * 2;
-        if (faces[i][j][0] !== 0 && faces[i][j][0] !== numberOfSegments - 1 && faces[i][j][1] !== 0 && faces[i][j][1] !== numberOfSegments - 1) {
-          triangleIndices.push([triangleIndex, 0], [triangleIndex + 1, 0]);
-        } else {
-          triangleIndices.push([triangleIndex, 1], [triangleIndex + 1, 1])
-        };
-      }
-    }
+
+    faces.forEach((face, i) => {
+      face.forEach(([x, y]) => {
+        const triangleIndex = numberTrianglesOneSide * i + x * 2 + (numberOfSegments - 1 - y) * numberOfSegments * 2;
+        // Determine if the triangle is on the edge of the box
+        const edgeValue = (x === 0 || x === numberOfSegments - 1 || y === 0 || y === numberOfSegments - 1) ? 1 : 0;
+        triangleIndices.push([triangleIndex, edgeValue], [triangleIndex + 1, edgeValue]);
+      });
+    });
+
     // Sort the triangleIndices array in descending order based on the first element of the inner arrays
     triangleIndices.sort((a, b) => b[0] - a[0]);
+
     return triangleIndices;
   }
 
-  // Get vertex positions of triangle
+
   function getVertexPositions(triangleIndex) {
     const a = indices[3 * triangleIndex];
     const b = indices[3 * triangleIndex + 1];
@@ -46,45 +52,17 @@ function insetFaces(box, numberOfSegments, size, faces) {
     ];
   }
 
-  // Get face normal of triangle
   function getFaceNormal(triangleIndex) {
-    // TODO: overcomplicated for inset faces?
-    const vertex1 = getVertexPositions(triangleIndex)[0];
-    const vertex2 = getVertexPositions(triangleIndex)[1];
-    const vertex3 = getVertexPositions(triangleIndex)[2];
+    const [vertex1, vertex2, vertex3] = getVertexPositions(triangleIndex);
+    const v1 = Vec3.differenceOf(vertex1, vertex2)
+    const v2 = Vec3.differenceOf(vertex1, vertex3)
 
-    // Calculate vectors v1 and v2
-    const v1 = {
-      x: vertex2.x - vertex1.x,
-      y: vertex2.y - vertex1.y,
-      z: vertex2.z - vertex1.z,
-    };
-    const v2 = {
-      x: vertex3.x - vertex1.x,
-      y: vertex3.y - vertex1.y,
-      z: vertex3.z - vertex1.z,
-    };
+    const normal = v1.cross(v2);
 
-    // Calculate the cross product of v1 and v2
-    const normal = {
-      x: v1.y * v2.z - v1.z * v2.y,
-      y: v1.z * v2.x - v1.x * v2.z,
-      z: v1.x * v2.y - v1.y * v2.x,
-    };
-
-    // Normalize the normal vector
-    const length = Math.sqrt(
-      normal.x * normal.x + normal.y * normal.y + normal.z * normal.z
-    );
-    normal.x /= length;
-    normal.y /= length;
-    normal.z /= length;
-
-    return normal;
+    return normal.normalize();
   }
 
-  // Inset a triangle face
-  function insetFace(triangle) {
+  function insetTriangle(triangle) {
     const triangleIndex = triangle[0];
     const originalVerticesPositions = getVertexPositions(triangleIndex);
     const originalVertices = [
@@ -92,38 +70,26 @@ function insetFaces(box, numberOfSegments, size, faces) {
       indices[3 * triangleIndex + 1],
       indices[3 * triangleIndex + 2],
     ];
+
     const faceNormal = getFaceNormal(triangleIndex);
-    const length = positions.length;
+    const startIndex = positions.length / 3;
 
-    // Add new inset vertices
-    for (let i = 0; i < 3; i++) {
-      positions.push(
-        originalVerticesPositions[i].x - faceNormal.x * insetDepth,
-        originalVerticesPositions[i].y - faceNormal.y * insetDepth,
-        originalVerticesPositions[i].z - faceNormal.z * insetDepth
-      );
+    // Add new inset positions, normals and texCoords
+    originalVerticesPositions.forEach(({ x, y, z }, i) => {
+      positions.push(x - faceNormal.x * insetDepth, y - faceNormal.y * insetDepth, z - faceNormal.z * insetDepth);
+      // Use same normals and texCoords as the original vertices
       normals.push(faceNormal.x, faceNormal.y, faceNormal.z);
-      // Use the same uvs as the original vertices
-      const uvs = new Vec2(
-        texCoords[2 * originalVertices[i]],
-        texCoords[2 * originalVertices[i] + 1]
-      );
-      texCoords.push(uvs.x, uvs.y);
-    }
+      texCoords.push(texCoords[2 * indices[3 * triangleIndex + i]], texCoords[2 * indices[3 * triangleIndex + i] + 1]);
+    });
 
-    const insetVertices = [length / 3, length / 3 + 1, length / 3 + 2];
-    indices.splice(
-      3 * triangleIndex,
-      3
-    );
+    // Delete the original triangle
+    indices.splice(3 * triangleIndex, 3);
 
+    const insetVertices = [startIndex, startIndex + 1, startIndex + 2];
+
+    // Create inset face if the triangle is not on the edge of the box
     if (triangle[1] === 0) {
-      const insetVertices = [length / 3, length / 3 + 1, length / 3 + 2];
-      indices.push(
-        insetVertices[0],
-        insetVertices[1],
-        insetVertices[2]
-      );
+      indices.push(insetVertices[0], insetVertices[1], insetVertices[2]);
     }
 
     originalVerticesArray.push(originalVertices);
@@ -131,8 +97,6 @@ function insetFaces(box, numberOfSegments, size, faces) {
   }
 
   function createWalls(topFaceVertices, bottomFaceVertices) {
-    // TODO: normals facing the wrong way?
-
     // Create list of index tuples
     let indexTuples = [];
     for (let i = 0; i < indices.length; i += 3) {
@@ -141,43 +105,17 @@ function insetFaces(box, numberOfSegments, size, faces) {
 
     // Create walls
     for (let i = 0; i < 3; i++) {
-      let drawTriangle = false;
-      for (let j = 0; j < indexTuples.length; j++) {
-        // Test if the triangle is on the edge of the inset vertices
-        if (
-          indexTuples[j].includes(topFaceVertices[i]) &&
-          indexTuples[j].includes(topFaceVertices[(i + 1) % 3])
-        ) {
-          drawTriangle = true;
-          break;
-        }
-      }
+      // Check if the triangle is on the edge of the inset vertices by checking if there already is a triangle between the vertices
+      const drawTriangle = indexTuples.some(triangle =>
+        triangle.includes(topFaceVertices[i]) && triangle.includes(topFaceVertices[(i + 1) % 3])
+      );
 
-      // Only draw the triangle if it is on the edge of inset vertices (not between two inset triangles)
+      // Only draw the wall if it is on the edge of inset vertices (not between two inset triangles)
       if (drawTriangle) {
-        indices.push(
-          topFaceVertices[i],
-          topFaceVertices[(i + 1) % 3],
-          bottomFaceVertices[i]
-        );
-        indices.push(
-          topFaceVertices[(i + 1) % 3],
-          bottomFaceVertices[(i + 1) % 3],
-          bottomFaceVertices[i]
-        );
+        indices.push(topFaceVertices[i], topFaceVertices[(i + 1) % 3], bottomFaceVertices[i]);
+        indices.push(topFaceVertices[(i + 1) % 3], bottomFaceVertices[(i + 1) % 3], bottomFaceVertices[i]);
       }
     }
-  }
-
-  const triangleIndices = getTriangleIndices();
-  // Sort indices in descending order
-  for (let i = 0; i < triangleIndices.length; i++) {
-    insetFace(triangleIndices[i]);
-  }
-
-  // Create walls at the edge of the inset faces
-  for (let i = 0; i < insetVerticesArray.length; i++) {
-    createWalls(originalVerticesArray[i], insetVerticesArray[i]);
   }
 }
 
@@ -191,9 +129,8 @@ function generateLabyrinthCube(segments) {
   return [side0, side1, side2, side3, side4, side5];
 
   function generateLabyrinth(segments, startPosition, endPosition) {
-    const width = (segments / 2) | 0;
+    const width = Math.floor(segments / 2);
 
-    // TODO: start can be either on the left wall or in the middle
     let points;
     let startPoint;
     let endPoint;
@@ -218,7 +155,7 @@ function generateLabyrinthCube(segments) {
       [0, -1],
     ];
 
-    init();
+    initLabyrinth();
     loop();
     return arrayToCoordinates(labyrinthArray);
 
@@ -249,7 +186,7 @@ function generateLabyrinthCube(segments) {
       }
     }
 
-    function init() {
+    function initLabyrinth() {
       route = [];
       labyrinthArray = [];
 
@@ -295,7 +232,7 @@ function generateLabyrinthCube(segments) {
           if (route.length === 0) {
             // Start again if end point is not connected
             if (labyrinthArray[endPoint[1] * 2][endPoint[0] * 2] === 0) {
-              init();
+              initLabyrinth();
               loop();
             }
 
@@ -308,7 +245,7 @@ function generateLabyrinthCube(segments) {
                   labyrinthArray[i][j + 1] === 1 &&
                   labyrinthArray[i + 1][j + 1] === 1
                 ) {
-                  init();
+                  initLabyrinth();
                   loop();
                 }
                 if (
@@ -317,7 +254,7 @@ function generateLabyrinthCube(segments) {
                   labyrinthArray[i + 1][j] === 0 &&
                   labyrinthArray[i][j + 1] === 0
                 ) {
-                  init();
+                  initLabyrinth();
                   loop();
                 }
                 if (
@@ -326,7 +263,7 @@ function generateLabyrinthCube(segments) {
                   labyrinthArray[i - 1][j] === 0 &&
                   labyrinthArray[i][j + 1] === 0
                 ) {
-                  init();
+                  initLabyrinth();
                   loop();
                 }
               }
