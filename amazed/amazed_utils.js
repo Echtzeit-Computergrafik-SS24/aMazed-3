@@ -7,6 +7,8 @@ function insetFaces(box, numberOfSegments, size, faces) {
   const insetDepth = size / numberOfSegments;
   const originalVerticesArray = [];
   const insetVerticesArray = [];
+  const indexTuples = [];
+  const edgeWalls = [];
 
   // Get triangle indices from array of faces to be inset
   const triangleIndices = getTriangleIndices();
@@ -16,9 +18,49 @@ function insetFaces(box, numberOfSegments, size, faces) {
     insetTriangle(triangleIndices[i]);
   }
 
+  for (let i = 0; i < indices.length; i += 3) {
+    indexTuples.push([indices[i], indices[i + 1], indices[i + 2]]);
+  }
+
   // Create walls at the edge of the inset faces
   for (let i = 0; i < insetVerticesArray.length; i++) {
-    createWalls(originalVerticesArray[i], insetVerticesArray[i]);
+    createWalls(originalVerticesArray[i], insetVerticesArray[i], indexTuples);
+  }
+
+  function isDuplicateTriangle(triangleArray, targetTriangle) {
+    let triangleInArray = false;
+    const targetTriangleSorted = sortFace(targetTriangle);
+
+    for (let i = 0; i < triangleArray.length - 1; i += 2) {
+      let combinedArray = [...triangleArray[i], ...triangleArray[i + 1]];
+      let uniqueSet = new Set(combinedArray.map((subArray) => JSON.stringify(subArray)));
+      const vertices = sortFace(Array.from(uniqueSet).map((item) => JSON.parse(item)));
+      if (
+        JSON.stringify(vertices).includes(JSON.stringify(targetTriangleSorted[0])) &&
+        JSON.stringify(vertices).includes(JSON.stringify(targetTriangleSorted[1])) &&
+        JSON.stringify(vertices).includes(JSON.stringify(targetTriangleSorted[2]))
+      ) {
+        triangleInArray = true;
+        break;
+      }
+    }
+    return triangleInArray;
+  }
+
+  function sortFace(triangle) {
+    triangle.forEach((vertex) => vertex.sort((a, b) => a - b));
+    return triangle;
+  }
+
+  function roundVector(vector, roundTo = 1000000) {
+    const truncTo = 1000;
+    vector.x = Math.round(vector.x * roundTo) / roundTo;
+    vector.y = Math.round(vector.y * roundTo) / roundTo;
+    vector.z = Math.round(vector.z * roundTo) / roundTo;
+    vector.x = Math.trunc(vector.x * truncTo) / truncTo;
+    vector.y = Math.trunc(vector.y * truncTo) / truncTo;
+    vector.z = Math.trunc(vector.z * truncTo) / truncTo;
+    return vector;
   }
 
   function getTriangleIndices() {
@@ -108,19 +150,25 @@ function insetFaces(box, numberOfSegments, size, faces) {
     // Create inset face if the triangle is not on the edge of the box
     if (triangle[1] === 0) {
       indices.push(insetVertices[0], insetVertices[1], insetVertices[2]);
-    }
+      originalVerticesArray.push(originalVertices);
+      insetVerticesArray.push(insetVertices);
+    } else {
+      const truncTo = 10;
+      const insetPosition = insetVertices.map((index) => [
+        Math.trunc(positions[index * 3] * truncTo) / truncTo,
+        Math.trunc(positions[index * 3 + 1] * truncTo) / truncTo,
+        Math.trunc(positions[index * 3 + 2] * truncTo) / truncTo,
+      ]);
 
-    originalVerticesArray.push(originalVertices);
-    insetVerticesArray.push(insetVertices);
+      if (!isDuplicateTriangle(edgeWalls, insetPosition)) {
+        originalVerticesArray.push(originalVertices);
+        insetVerticesArray.push(insetVertices);
+      }
+      edgeWalls.push(insetPosition);
+    }
   }
 
-  function createWalls(topFaceVertices, bottomFaceVertices) {
-    // Create list of index tuples
-    let indexTuples = [];
-    for (let i = 0; i < indices.length; i += 3) {
-      indexTuples.push([indices[i], indices[i + 1], indices[i + 2]]);
-    }
-
+  function createWalls(topFaceVertices, bottomFaceVertices, indexTuples) {
     // Create walls
     for (let i = 0; i < 3; i++) {
       // Check if the triangle is on the edge of the inset vertices by checking if there already is a triangle between the vertices

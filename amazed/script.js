@@ -123,16 +123,12 @@ const labyShader = glance.createShader(gl, "my-shader", vertexShaderSource, frag
 });
 
 // Data //////////////////////////////////////////////////////////////////
-const numberOfSegments = 21;
+const numberOfSegments = 21; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
 
-// Create the cube geometry
+// Create the cube labyrinth
 const cube = glance.createBox('cube-geo', { width: cubeSize, height: cubeSize, depth: cubeSize, widthSegments: numberOfSegments, heightSegments: numberOfSegments, depthSegments: numberOfSegments });
-
-// Generate the labyrinth cube
 const labyrinth = amazed.generateLabyrinthCube(numberOfSegments);
-
-// Inset the faces of the cube based on the labyrinth
 amazed.insetFaces(cube, numberOfSegments, cubeSize, labyrinth);
 
 // Create the index buffer object for the labyrinth
