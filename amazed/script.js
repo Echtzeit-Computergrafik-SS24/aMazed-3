@@ -1,5 +1,5 @@
 import * as glance from '../glance/js/index.js';
-import * as amazed from './amazed_utils.js';
+import * as amazed from './amazed.js';
 
 // Get the WebGL context
 const canvas = document.getElementById('canvas');
@@ -123,13 +123,10 @@ const labyShader = glance.createShader(gl, "my-shader", vertexShaderSource, frag
 });
 
 // Data //////////////////////////////////////////////////////////////////
+// Create the labyrinth cube
 const numberOfSegments = 21; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
-
-// Create the cube labyrinth
-const cube = glance.createBox('cube-geo', { width: cubeSize, height: cubeSize, depth: cubeSize, widthSegments: numberOfSegments, heightSegments: numberOfSegments, depthSegments: numberOfSegments });
-const labyrinth = amazed.generateLabyrinthCube(numberOfSegments);
-amazed.insetFaces(cube, numberOfSegments, cubeSize, labyrinth);
+const cube = amazed.generateLabyrinthCube(numberOfSegments, cubeSize);
 
 // Create the index buffer object for the labyrinth
 const labyIBO = glance.createIndexBuffer(gl, cube.indices);
