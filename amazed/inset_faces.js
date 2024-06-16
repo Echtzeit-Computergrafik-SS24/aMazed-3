@@ -1,4 +1,4 @@
-import { Vec3 } from "../glance/js/math/index.js";
+import { Vec3, Vec2, Mat3 } from "../glance/js/math/index.js";
 export { insetFaces };
 
 /// Inset specified faces of a cube by cubeSize/numberOfSegments
@@ -203,6 +203,23 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
   /// @param {Array} topFaceVertices - Array containing the vertices of the original face
   /// @param {Array} bottomFaceVertices - Array containing the vertices of the inset face
   function createWalls(topFaceVertices, bottomFaceVertices, indexTuples) {
+    const faceNormal = getNormalFromVertices(
+      new Vec3(
+        positions[topFaceVertices[0] * 3],
+        positions[topFaceVertices[0] * 3 + 1],
+        positions[topFaceVertices[0] * 3 + 2]
+      ),
+      new Vec3(
+        positions[topFaceVertices[1] * 3],
+        positions[topFaceVertices[1] * 3 + 1],
+        positions[topFaceVertices[1] * 3 + 2]
+      ),
+      new Vec3(
+        positions[topFaceVertices[2] * 3],
+        positions[topFaceVertices[2] * 3 + 1],
+        positions[topFaceVertices[2] * 3 + 2]
+      )
+    );
     // Create walls
     for (let i = 0; i < 3; i++) {
       // Check if the triangle is on the edge of the inset vertices by checking if there already is a triangle between the vertices
@@ -212,19 +229,150 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
           triangle.includes(topFaceVertices[(i + 1) % 3])
       );
 
+      // Get topFaceVertices positions
+      const currentTopFacePositions = new Vec3(
+        positions[topFaceVertices[i] * 3],
+        positions[topFaceVertices[i] * 3 + 1],
+        positions[topFaceVertices[i] * 3 + 2]
+      );
+
+      const nextTopFacePositions = new Vec3(
+        positions[topFaceVertices[(i + 1) % 3] * 3],
+        positions[topFaceVertices[(i + 1) % 3] * 3 + 1],
+        positions[topFaceVertices[(i + 1) % 3] * 3 + 2]
+      );
+
+      // Get bottomFaceVertices positions
+      const currentBottomFacePositions = new Vec3(
+        positions[bottomFaceVertices[i] * 3],
+        positions[bottomFaceVertices[i] * 3 + 1],
+        positions[bottomFaceVertices[i] * 3 + 2]
+      );
+
+      const nextBottomFacePositions = new Vec3(
+        positions[bottomFaceVertices[(i + 1) % 3] * 3],
+        positions[bottomFaceVertices[(i + 1) % 3] * 3 + 1],
+        positions[bottomFaceVertices[(i + 1) % 3] * 3 + 2]
+      );
+
+      // get topFace texCoords
+      const currentTopFaceTexCoords = new Vec2(
+        texCoords[topFaceVertices[i] * 2],
+        texCoords[topFaceVertices[i] * 2 + 1]
+      );
+
+      const nextTopFaceTexCoords = new Vec2(
+        texCoords[topFaceVertices[(i + 1) % 3] * 2],
+        texCoords[topFaceVertices[(i + 1) % 3] * 2 + 1]
+      );
+
+      let wallNormal = getNormalFromVertices(
+        currentTopFacePositions,
+        nextTopFacePositions,
+        currentBottomFacePositions
+      );
+
       // Only draw the wall if it is on the edge of inset vertices (not between two inset triangles)
       if (drawTriangle) {
-        indices.push(
-          topFaceVertices[i],
-          topFaceVertices[(i + 1) % 3],
-          bottomFaceVertices[i]
+        /// Create new vertices to get correct uv coordinates
+        // Push to positions
+        const posLength = positions.length / 3;
+        positions.push(
+          currentTopFacePositions.x,
+          currentTopFacePositions.y,
+          currentTopFacePositions.z,
+          nextTopFacePositions.x,
+          nextTopFacePositions.y,
+          nextTopFacePositions.z,
+          currentBottomFacePositions.x,
+          currentBottomFacePositions.y,
+          currentBottomFacePositions.z,
+          nextBottomFacePositions.x,
+          nextBottomFacePositions.y,
+          nextBottomFacePositions.z
         );
-        indices.push(
-          topFaceVertices[(i + 1) % 3],
-          bottomFaceVertices[(i + 1) % 3],
-          bottomFaceVertices[i]
+
+        // Push to normals
+        normals.push(
+          wallNormal.x,
+          wallNormal.y,
+          wallNormal.z,
+          wallNormal.x,
+          wallNormal.y,
+          wallNormal.z,
+          wallNormal.x,
+          wallNormal.y,
+          wallNormal.z,
+          wallNormal.x,
+          wallNormal.y,
+          wallNormal.z
         );
+
+        if (faceNormal.x === 0 && faceNormal.y !== 0 && faceNormal.z === 0) {
+            wallNormal.z = -wallNormal.z;
+        } else if (
+          faceNormal.x !== 0 &&
+          faceNormal.y === 0 &&
+          faceNormal.z === 0
+        ) {
+            const temp = wallNormal.x;
+            wallNormal.x = wallNormal.z;
+            wallNormal.z = temp;
+        }
+        // Push uv coordinates to texCoords with offset depending on face normal
+        if (wallNormal.x !== 0 && wallNormal.y === 0 && wallNormal.z === 0) {
+          texCoords.push(
+            currentTopFaceTexCoords[0],
+            currentTopFaceTexCoords[1],
+            nextTopFaceTexCoords[0],
+            nextTopFaceTexCoords[1],
+            currentTopFaceTexCoords[0] + 1 / numberOfSegments * wallNormal.x,
+            currentTopFaceTexCoords[1],
+            nextTopFaceTexCoords[0] + 1 / numberOfSegments * wallNormal.x,
+            nextTopFaceTexCoords[1]
+          );
+        } else if (
+          wallNormal.x === 0 &&
+          wallNormal.y !== 0 &&
+          wallNormal.z === 0
+        ) {
+          texCoords.push(
+            currentTopFaceTexCoords[0],
+            currentTopFaceTexCoords[1],
+            nextTopFaceTexCoords[0],
+            nextTopFaceTexCoords[1],
+            currentTopFaceTexCoords[0],
+            currentTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.y,
+            nextTopFaceTexCoords[0],
+            nextTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.y
+          );
+        } else if (
+          wallNormal.x === 0 &&
+          wallNormal.y === 0 &&
+          wallNormal.z !== 0
+        ) {
+          texCoords.push(
+            currentTopFaceTexCoords[0],
+            currentTopFaceTexCoords[1],
+            nextTopFaceTexCoords[0],
+            nextTopFaceTexCoords[1],
+            currentTopFaceTexCoords[0],
+            currentTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.z,
+            nextTopFaceTexCoords[0],
+            nextTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.z
+          );
+        } 
+
+        // Push new indices
+        indices.push(posLength, posLength + 1, posLength + 2);
+        indices.push(posLength + 1, posLength + 3, posLength + 2);
       }
+    }
+
+    function getNormalFromVertices(v1, v2, v3) {
+      const a = Vec3.differenceOf(v1, v2);
+      const b = Vec3.differenceOf(v1, v3);
+      return a.cross(b).normalize().round();
     }
   }
 }

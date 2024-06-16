@@ -96,19 +96,19 @@ const fragmentShaderSource = `#version 300 es
         vec3 normal = normalize(f_normal);
         vec3 texDiffuse = texture(u_texDiffuse, f_texCoord).rgb;
 
-        vec3 color1 = vec3(.3, .3, .7);
-        vec3 color2 = vec3(.4, .4, .6);
-        vec3 color3 = vec3(.6, .6, .8);
+        vec3 color1 = vec3(.5, .5, .5);
+        vec3 color2 = vec3(.7, .7, .7);
+        // vec3 color3 = vec3(.6, .6, .8);
 
         vec3 temp = f_worldPos * f_normal;
         vec3 finalColor;
         
         if (temp.x + temp.y + temp.z == u_threshold1) {
-            finalColor = color1;
+            finalColor = texDiffuse * color1;
         } else if (temp.x + temp.y + temp.z == u_threshold2) {
-            finalColor = color3;
-        } else {
             finalColor = texDiffuse;
+        } else {
+            finalColor = texDiffuse  * color2;
         }
 
         o_fragColor = vec4(finalColor, 1.0);
@@ -124,7 +124,7 @@ const labyShader = glance.createShader(gl, "my-shader", vertexShaderSource, frag
 
 // Data //////////////////////////////////////////////////////////////////
 // Create the labyrinth cube
-const numberOfSegments = 21; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const numberOfSegments = 15; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
 const cube = amazed.generateLabyrinthCube(numberOfSegments, cubeSize);
 
