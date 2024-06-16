@@ -96,8 +96,8 @@ const fragmentShaderSource = `#version 300 es
         vec3 normal = normalize(f_normal);
         vec3 texDiffuse = texture(u_texDiffuse, f_texCoord).rgb;
 
-        vec3 color1 = vec3(.5, .5, .5);
-        vec3 color2 = vec3(.7, .7, .7);
+        vec3 color1 = vec3(.4, .4, .4);
+        vec3 color2 = vec3(.6, .6, .6);
         // vec3 color3 = vec3(.6, .6, .8);
 
         vec3 temp = f_worldPos * f_normal;
@@ -116,7 +116,7 @@ const fragmentShaderSource = `#version 300 es
 `;
 
 // Create the labyrinth shader
-const labyShader = glance.createShader(gl, "my-shader", vertexShaderSource, fragmentShaderSource, {
+const labyShader = glance.createShader(gl, "laby-shader", vertexShaderSource, fragmentShaderSource, {
     u_viewMatrix: glance.Mat4.fromTranslation(0, 0, -2),
     u_projectionMatrix: glance.Mat4.perspective((60 / 180) * Math.PI, gl.canvas.width / gl.canvas.height, 0.1, 10),
     u_texDiffuse: 0,
@@ -142,7 +142,7 @@ const labyABO = glance.createAttributeBuffer(gl, 'laby-abo', {
 const labyVAO = glance.createVAO(gl, 'laby-vao', labyIBO, glance.buildAttributeMap(labyShader, labyABO));
 
 // Load texture
-const labyTextureDiffuse = await glance.loadTextureNow(gl, './assets/uv_test.jpg');
+const labyTextureDiffuse = await glance.loadTextureNow(gl, './assets/cobblestone.jpg');
 
 // Create the draw call for the labyrinth
 const labyDrawCall = glance.createDrawCall(gl, labyShader, labyVAO, {
