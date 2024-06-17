@@ -258,7 +258,7 @@ const mazeCube = amazed.generateLabyrinthCube(numberOfSegments, cubeSize);
 
 // tiling size
 mazeCube.texCoords = mazeCube.texCoords.map((c, i) =>
-  i % 2 === 0 ? c * 4 : c * 2
+  i % 2 === 0 ? c * 8 : c * 4
 );
 
 const mazeIBO = glance.createIndexBuffer(gl, mazeCube.indices);
