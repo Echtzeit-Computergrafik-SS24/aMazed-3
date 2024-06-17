@@ -141,11 +141,12 @@ const vertexShaderSource = `#version 300 es
     in vec3 a_tangent;
     in vec2 a_texCoord;
 
-    out vec3 f_worldPos;
+    out vec3 f_worldPosTangent;
     out vec2 f_texCoord;
     out vec3 f_lightPos;
     out vec3 f_viewPos;
     out vec3 f_normal;
+    out vec3 f_worldPos;
 
     void main() {
         vec3 normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
@@ -156,12 +157,15 @@ const vertexShaderSource = `#version 300 es
         vec4 worldPosition = u_modelMatrix * vec4(a_pos, 1.0);
 
         // Transform world space coords to tangent space
-        f_worldPos = worldToTangent * worldPosition.xyz;
+        f_worldPosTangent = worldToTangent * worldPosition.xyz;
         f_lightPos = worldToTangent * u_lightPos;
         f_viewPos = worldToTangent * u_viewPos;
 
         f_normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
         f_texCoord = a_texCoord;
+
+        vec4 worldPos = u_modelMatrix * vec4(a_pos, 1.0);
+        f_worldPos = worldPos.xyz;
 
         gl_Position = u_projectionMatrix * u_viewMatrix * worldPosition;
     }
@@ -181,11 +185,12 @@ const fragmentShaderSource = `#version 300 es
     uniform float u_threshold1;
     uniform float u_threshold2;
 
-    in vec3 f_worldPos;
+    in vec3 f_worldPosTangent;
     in vec2 f_texCoord;
     in vec3 f_lightPos;
     in vec3 f_viewPos;
     in vec3 f_normal;
+    in vec3 f_worldPos;
 
     out vec4 o_fragColor;
 
@@ -197,8 +202,8 @@ const fragmentShaderSource = `#version 300 es
 
         // lighting
         vec3 normal = normalize(texNormal * (255./128.) - 1.0);
-        vec3 lightDir = normalize(f_lightPos - f_worldPos);
-        vec3 viewDir = normalize(f_viewPos - f_worldPos);
+        vec3 lightDir = normalize(f_lightPos - f_worldPosTangent);
+        vec3 viewDir = normalize(f_viewPos - f_worldPosTangent);
         vec3 halfWay = normalize(viewDir + lightDir);
 
         // ambient
@@ -216,7 +221,7 @@ const fragmentShaderSource = `#version 300 es
         vec3 pathColor = vec3(.4, .4, .4);
         vec3 wallColor = vec3(.6, .6, .6);
 
-        vec3 faceType = f_worldPos * normalize(f_normal);
+        vec3 faceType = f_worldPos * f_normal;
         vec3 finalColor = vec3(ambient + diffuse + specular);
 
         if (faceType.x + faceType.y + faceType.z == u_threshold1) {
