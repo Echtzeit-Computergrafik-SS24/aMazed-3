@@ -4,7 +4,7 @@ import * as glance from '../glance/js/index.js';
 export { generateLabyrinthCube };
 
 function generateLabyrinthCube(numberOfSegments, cubeSize) {
-  const cube = glance.createBox("cube-geo", {
+  const cube = glance.createBox("maze-geo", {
     width: cubeSize,
     height: cubeSize,
     depth: cubeSize,

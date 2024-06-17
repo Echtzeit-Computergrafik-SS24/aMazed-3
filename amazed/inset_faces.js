@@ -1,4 +1,5 @@
-import { Vec3, Vec2, Mat3 } from "../glance/js/math/index.js";
+import { Vec3, Vec2 } from "../glance/js/math/index.js";
+import { computeTangents, removeUnusedVertices } from "../glance/js/assets/geo.js";
 export { insetFaces };
 
 /// Inset specified faces of a cube by cubeSize/numberOfSegments
@@ -32,6 +33,10 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
   for (let i = 0; i < insetVerticesArray.length; i++) {
     createWalls(originalVerticesArray[i], insetVerticesArray[i], indexTuples);
   }
+
+  // Remove unused faces
+  removeUnusedVertices(cube.name, cube.indices, cube.positions, cube.texCoords, cube.normals);
+  cube.tangents = computeTangents(cube.positions, cube.texCoords, cube.indices, cube.normals);
 
   return cube;
 
