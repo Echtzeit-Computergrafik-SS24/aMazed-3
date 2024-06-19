@@ -263,7 +263,7 @@ mazeCube.texCoords = mazeCube.texCoords.map((c, i) =>
 );
 
 const mazeIBO = glance.createIndexBuffer(gl, mazeCube.indices);
-const mazeABO = glance.createAttributeBuffer(gl, "geo-abo", {
+const mazeABO = glance.createAttributeBuffer(gl, "maze-abo", {
   a_pos: { data: mazeCube.positions, height: 3 },
   a_normal: { data: mazeCube.normals, height: 3 },
   a_texCoord: { data: mazeCube.texCoords, height: 2 },
@@ -271,7 +271,7 @@ const mazeABO = glance.createAttributeBuffer(gl, "geo-abo", {
 });
 const mazeVAO = glance.createVAO(
   gl,
-  "geo-vao",
+  "maze-vao",
   mazeIBO,
   glance.buildAttributeMap(mazeShader, [mazeABO])
 );
