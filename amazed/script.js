@@ -51,12 +51,11 @@ function onMouseDrag(callback) {
 }
 
 function onMouseWheel(callback) {
-    glCanvas.addEventListener("wheel", (e) => {
+  glCanvas.addEventListener("wheel", (e) => {
     e.preventDefault();
     callback(e);
   });
 }
-
 
 // Game Code Start /////////////////////////////////////////////////////////
 
@@ -78,7 +77,7 @@ const minTilt = Math.PI / -2;
 const maxTilt = Math.PI / 2;
 
 const lightDistance = 0.25;
-const lightRadius = 2.;
+const lightRadius = 2;
 const lightSpeed = 0.0002;
 
 // =====================================================================
@@ -124,7 +123,7 @@ const viewMatrix = Mat4.identity();
 const lightPos = Vec3.zero();
 
 // =====================================================================
-// Geometry
+// Maze
 // =====================================================================
 
 const vertexShaderSource = `#version 300 es
@@ -235,9 +234,6 @@ const fragmentShaderSource = `#version 300 es
     }
 `;
 
-// =====================================================================
-// Maze
-// =====================================================================
 const mazeShader = glance.createShader(
   gl,
   "maze-shader",
@@ -353,7 +349,11 @@ const bulbShader = glance.createShader(
   bulbFSSource
 );
 
-const bulbGeo = glance.createSphere("bulb-geo", { radius: 0.1, longitudeBands:  32, latitudeBands: 16,});
+const bulbGeo = glance.createSphere("bulb-geo", {
+  radius: 0.1,
+  longitudeBands: 32,
+  latitudeBands: 16,
+});
 const bulbIBO = glance.createIndexBuffer(gl, bulbGeo.indices);
 const bulbABO = glance.createAttributeBuffer(gl, "bulb-abo", {
   a_pos: { data: bulbGeo.positions, height: 3 },
@@ -376,10 +376,178 @@ const bulbDrawCall = glance.createDrawCall(gl, bulbShader, bulbVAO, {
 });
 
 // =====================================================================
+// Skybox
+// =====================================================================
+
+const skyboxVSSource = `#version 300 es
+    precision highp float;
+
+    uniform mat4 u_viewMatrix;
+    uniform mat4 u_projectionMatrix;
+
+    in vec3 a_pos;
+
+    out vec3 f_texCoord;
+
+    void main() {
+        // Use the local position of the vertex as texture coordinate.
+        f_texCoord = vec3(1, -1, -1) * a_pos;
+
+        // By setting Z == W, we ensure that the vertex is projected onto the
+        // far plane, which is exactly what we want for the background.
+        vec4 ndcPos = u_projectionMatrix * u_viewMatrix * vec4(a_pos, 0.0);
+        gl_Position = ndcPos.xyww;
+    }
+`;
+
+const skyboxFSSource = `#version 300 es
+    precision mediump float;
+
+    uniform samplerCube u_skybox;
+
+    in vec3 f_texCoord;
+
+    out vec4 o_fragColor;
+
+    void main() {
+        // The fragment color is simply the color of the skybox at the given
+        // texture coordinate (local coordinate) of the fragment on the cube.
+        o_fragColor = texture(u_skybox, f_texCoord);
+    }
+`;
+
+const skyboxVertexShader = gl.createShader(gl.VERTEX_SHADER);
+gl.shaderSource(skyboxVertexShader, skyboxVSSource);
+gl.compileShader(skyboxVertexShader);
+
+const skyboxFragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+gl.shaderSource(skyboxFragmentShader, skyboxFSSource);
+gl.compileShader(skyboxFragmentShader);
+
+const skyboxShaderProgram = gl.createProgram();
+gl.attachShader(skyboxShaderProgram, skyboxVertexShader);
+gl.attachShader(skyboxShaderProgram, skyboxFragmentShader);
+gl.linkProgram(skyboxShaderProgram);
+
+// Create the Skybox attributes and -indices.
+const skybox = glance.createBox("my-skybox");
+
+// Create a Vertex Array Object (VAO) to store the skybox setup.
+const skyboxVAO = gl.createVertexArray();
+gl.bindVertexArray(skyboxVAO);
+
+const skyboxAttributeBuffer = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, skyboxAttributeBuffer);
+gl.bufferData(
+  gl.ARRAY_BUFFER,
+  new Float32Array(skybox.positions),
+  gl.STATIC_DRAW
+);
+
+const skyboxIndexBuffer = gl.createBuffer();
+const skyboxIndexData = new Uint16Array(skybox.indices);
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyboxIndexBuffer);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, skyboxIndexData, gl.STATIC_DRAW);
+
+const skyboxPositionAttribute = gl.getAttribLocation(
+  skyboxShaderProgram,
+  "a_pos"
+);
+gl.enableVertexAttribArray(skyboxPositionAttribute);
+gl.vertexAttribPointer(
+  skyboxPositionAttribute,
+  3,
+  gl.FLOAT,
+  false,
+  3 * 4,
+  0 * 4
+);
+
+const skyboxTextureUrls = [
+  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-right.avif",
+  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-left.avif",
+  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-bottom.avif",
+  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-top.avif",
+  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-front.avif",
+  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-back.avif",
+];
+
+const skyboxTexture = gl.createTexture();
+
+let cubeMapFacesLoaded = 0;
+for (let texUrlIdx = 0; texUrlIdx < 6; texUrlIdx++) {
+  // Bind the texture to the right target
+  const bindTarget = gl.TEXTURE_CUBE_MAP;
+  gl.bindTexture(bindTarget, skyboxTexture);
+
+  // Define the placeholder texture data
+  const dataTarget = gl.TEXTURE_CUBE_MAP_POSITIVE_X + texUrlIdx;
+  gl.texImage2D(
+    dataTarget,
+    0,
+    gl.RGBA,
+    1,
+    1,
+    0,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    new Uint8Array([0, 0, 0, 255])
+  );
+
+  let image = new Image();
+  image.crossOrigin = "anonymous";
+  image.onload = () => {
+    cubeMapFacesLoaded++;
+
+    gl.bindTexture(bindTarget, skyboxTexture);
+
+    // Tell WebGL to flip texture data vertically when loading it.
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+    gl.texImage2D(dataTarget, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, image);
+
+    if (cubeMapFacesLoaded === 6) {
+      gl.generateMipmap(bindTarget);
+      gl.texParameteri(
+        bindTarget,
+        gl.TEXTURE_MIN_FILTER,
+        gl.LINEAR_MIPMAP_LINEAR
+      );
+    }
+    image = null;
+  };
+  image.src = skyboxTextureUrls[texUrlIdx];
+}
+
+// Handle skybox uniforms.
+const skyboxViewMatrixUniform = gl.getUniformLocation(
+  skyboxShaderProgram,
+  "u_viewMatrix"
+);
+const skyboxProjectionMatrixUniform = gl.getUniformLocation(
+  skyboxShaderProgram,
+  "u_projectionMatrix"
+);
+const skyboxTextureUniform = gl.getUniformLocation(
+  skyboxShaderProgram,
+  "u_skybox"
+);
+
+gl.useProgram(skyboxShaderProgram);
+gl.uniformMatrix4fv(skyboxProjectionMatrixUniform, false, projectionMatrix);
+gl.uniform1i(skyboxTextureUniform, 0);
+
+// =====================================================================
 // Render Loop
 // =====================================================================
 
 setRenderLoop((time) => {
+  // Do not draw anything until all textures are loaded.
+  if (cubeMapFacesLoaded < 6) {
+    return;
+  }
+
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
   // Update the user camera
   viewPos.set(0, 0, zoom).rotateX(tilt).rotateY(pan);
   viewMatrix.lookAt(viewPos, Vec3.zero(), Vec3.yAxis());
@@ -391,10 +559,28 @@ setRenderLoop((time) => {
     Math.sin(time * lightSpeed) * lightRadius
   );
 
+  {
+    // Draw the skybox
+    gl.useProgram(skyboxShaderProgram);
+
+    // Textures.
+    gl.activeTexture(gl.TEXTURE0 + 0);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+
+    // Uniforms.
+    gl.uniformMatrix4fv(skyboxViewMatrixUniform, false, viewMatrix);
+
+    // Draw Call Parameters
+    gl.disable(gl.CULL_FACE);
+
+    // VAO
+    gl.bindVertexArray(skyboxVAO);
+
+    // Draw Call
+    gl.drawElements(gl.TRIANGLES, skyboxIndexData.length, gl.UNSIGNED_SHORT, 0);
+  }
+
   // Render the scene
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   glance.performDrawCall(gl, bulbDrawCall, time);
   glance.performDrawCall(gl, mazeDrawCall, time);
 });
-
-// Game Code End ///////////////////////////////////////////////////////////
