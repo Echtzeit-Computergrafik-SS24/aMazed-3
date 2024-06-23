@@ -290,11 +290,11 @@ const mazeShader = glance.createShader(
   {
     u_lightProjection: lightProjection,
     u_modelMatrix: Mat4.identity(),
-    u_ambient: 0.3,
+    u_ambient: 0.2,
     u_diffuse: 0.9,
     u_specular: 0.15,
     u_shininess: 128,
-    u_lightColor: [1.6, 1.7, 1.9],
+    u_lightColor: [1.2, 1.3, 1.7],
     u_texDiffuse: 0,
     u_texSpecular: 1,
     u_texNormal: 2,
@@ -460,12 +460,12 @@ gl.vertexAttribPointer(
 );
 
 const skyboxTextureUrls = [
-  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-right.avif",
-  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-left.avif",
-  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-bottom.avif",
-  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-top.avif",
-  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-front.avif",
-  "https://echtzeit-computergrafik-ss24.github.io/img/skybox-back.avif",
+  "./assets/skybox/right.png",
+  "./assets/skybox/left.png",
+  "./assets/skybox/bottom.png",
+  "./assets/skybox/top.png",
+  "./assets/skybox/front.png",
+  "./assets/skybox/back.png",
 ];
 
 const skyboxTexture = gl.createTexture();
