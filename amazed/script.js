@@ -63,6 +63,10 @@ function onMouseWheel(callback) {
 // Constants
 // =====================================================================
 
+// Globals
+const origin = Vec3.zero();
+const up = Vec3.yAxis();
+
 const fov = Math.PI / 4;
 const nearPlane = 0.1;
 const farPlane = 14;
@@ -79,6 +83,16 @@ const maxTilt = Math.PI / 2;
 const lightDistance = 0.25;
 const lightRadius = 2;
 const lightSpeed = 0.0002;
+
+// Scene settings
+const groundOffset = -0.75;
+const statueOffset = 0;
+const statueRotation = 0;
+
+// Light settings
+const lightProjection = Mat4.ortho(-0.5, 0.5, -0.8, 0.95, 0.3, 4.1);
+const lightRotationSpeed = 0.0003;
+const lightTilt = 0.4;
 
 // =====================================================================
 // Game State
@@ -121,6 +135,22 @@ const viewPos = Vec3.zero();
 const viewMatrix = Mat4.identity();
 
 const lightPos = Vec3.zero();
+const lightXform = Mat4.identity();
+
+const shadowDepthTexture = glance.createTexture(
+  gl,
+  "shadow-depth",
+  1024,
+  1024,
+  gl.TEXTURE_2D,
+  null,
+  {
+    useAnisotropy: false,
+    internalFormat: gl.DEPTH_COMPONENT16,
+    levels: 1,
+    filter: gl.NEAREST,
+  }
+);
 
 // =====================================================================
 // Maze
@@ -132,8 +162,10 @@ const vertexShaderSource = `#version 300 es
     uniform mat4 u_modelMatrix;
     uniform mat4 u_viewMatrix;
     uniform mat4 u_projectionMatrix;
-    uniform vec3 u_viewPos;
-    uniform vec3 u_lightPos;
+    uniform vec3 u_viewPosition;
+    uniform vec3 u_lightPosition;
+    uniform mat4 u_lightProjection;
+    uniform mat4 u_lightXform;
 
     in vec3 a_pos;
     in vec3 a_normal;
@@ -145,7 +177,11 @@ const vertexShaderSource = `#version 300 es
     out vec3 f_lightPos;
     out vec3 f_viewPos;
     out vec3 f_normal;
-    out vec3 f_worldPos;
+    out vec3 f_fragPosWS;
+    out vec4 f_fragPosLS;
+    out vec3 f_viewPosWS;
+    out vec3 f_lightDirWS;
+    out vec3 f_normalWS;
 
     void main() {
         vec3 normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
@@ -157,14 +193,17 @@ const vertexShaderSource = `#version 300 es
 
         // Transform world space coords to tangent space
         f_worldPosTangent = worldToTangent * worldPosition.xyz;
-        f_lightPos = worldToTangent * u_lightPos;
-        f_viewPos = worldToTangent * u_viewPos;
+        f_lightPos = worldToTangent * u_lightPosition;
+        f_viewPos = worldToTangent * u_viewPosition;
 
         f_normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
+        f_normalWS = normalize(mat3(u_modelMatrix) * a_normal);
         f_texCoord = a_texCoord;
+        f_viewPosWS = u_viewPosition;
+        f_lightDirWS = normalize(u_lightPosition);
 
-        vec4 worldPos = u_modelMatrix * vec4(a_pos, 1.0);
-        f_worldPos = worldPos.xyz;
+        f_fragPosWS = worldPosition.xyz;
+        f_fragPosLS = u_lightProjection * u_lightXform * worldPosition;
 
         gl_Position = u_projectionMatrix * u_viewMatrix * worldPosition;
     }
@@ -180,6 +219,7 @@ const fragmentShaderSource = `#version 300 es
     uniform sampler2D u_texDiffuse;
     uniform sampler2D u_texSpecular;
     uniform sampler2D u_texNormal;
+    uniform sampler2D u_texShadow;
 
     uniform float u_threshold1;
     uniform float u_threshold2;
@@ -189,9 +229,15 @@ const fragmentShaderSource = `#version 300 es
     in vec3 f_lightPos;
     in vec3 f_viewPos;
     in vec3 f_normal;
-    in vec3 f_worldPos;
+    in vec3 f_fragPosWS;
+    in vec3 f_viewPosWS;
+    in vec3 f_lightDirWS;
+    in vec3 f_normalWS;
+    in vec4 f_fragPosLS;
 
     out vec4 o_fragColor;
+
+    float calculateShadow();
 
     void main() {
         // texture
@@ -203,7 +249,8 @@ const fragmentShaderSource = `#version 300 es
         vec3 normal = normalize(texNormal * (255./128.) - 1.0);
         vec3 lightDir = normalize(f_lightPos - f_worldPosTangent);
         vec3 viewDir = normalize(f_viewPos - f_worldPosTangent);
-        vec3 halfWay = normalize(viewDir + lightDir);
+        vec3 viewDirection = normalize(f_viewPosWS - f_fragPosWS);
+        vec3 halfWay = normalize(viewDir + f_lightDirWS);
 
         // ambient
         vec3 ambient = texDiffuse * u_ambient;
@@ -216,12 +263,15 @@ const fragmentShaderSource = `#version 300 es
         float specularIntensity = pow(max(dot(normal, halfWay), 0.0), u_shininess);
         vec3 specular = texSpecular * specularIntensity * u_lightColor * u_specular;
 
+        // shadow
+        float shadow = calculateShadow();
+
         // colors for different parts of the maze
         vec3 pathColor = vec3(.4, .4, .4);
         vec3 wallColor = vec3(.6, .6, .6);
 
-        vec3 faceType = f_worldPos * f_normal;
-        vec3 finalColor = vec3(ambient + diffuse + specular);
+        vec3 faceType = f_fragPosWS * f_normal;
+        vec3 finalColor = vec3(ambient + shadow * (diffuse + specular));
 
         if (faceType.x + faceType.y + faceType.z == u_threshold1) {
             finalColor = pathColor * finalColor;
@@ -232,6 +282,23 @@ const fragmentShaderSource = `#version 300 es
         // result
         o_fragColor = vec4(finalColor, 1.0);
     }
+
+    float calculateShadow() {
+        // Perspective divide.
+        vec3 projCoords = f_fragPosLS.xyz / f_fragPosLS.w;
+
+        // Transform to [0,1] range.
+        projCoords = projCoords * 0.5 + 0.5;
+
+        // No shadow for fragments outside of the light's frustum.
+        if(any(lessThan(projCoords, vec3(0))) || any(greaterThan(projCoords, vec3(1)))){
+            return 1.0;
+        }
+
+        float bias = 0.002;
+        float closestDepth = texture(u_texShadow, projCoords.xy).r;
+        return projCoords.z - bias > closestDepth  ? 0.0 : 1.0;
+    }
 `;
 
 const mazeShader = glance.createShader(
@@ -240,21 +307,23 @@ const mazeShader = glance.createShader(
   vertexShaderSource,
   fragmentShaderSource,
   {
+    u_lightProjection: lightProjection,
     u_modelMatrix: Mat4.identity(),
-    u_ambient: 0.1,
+    u_ambient: 0.2,
     u_diffuse: 0.9,
     u_specular: 0.15,
     u_shininess: 128,
-    u_lightColor: [1, 1, 1],
+    u_lightColor: [1.6, 1.7, 1.9],
     u_texDiffuse: 0,
     u_texSpecular: 1,
     u_texNormal: 2,
+    u_texShadow: 3,
   }
 );
 
 // Create the maze cube
 const numberOfSegments = 17; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
-const cubeSize = 1;
+const cubeSize = .5;
 const mazeCube = amazed.generateLabyrinthCube(numberOfSegments, cubeSize);
 
 // tiling size
@@ -300,10 +369,13 @@ const geoTextureNormal = await glance.loadTextureNow(
 
 const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   uniforms: {
+    u_modelMatrix: () =>
+      Mat4.fromTranslationY(statueOffset).rotateY(statueRotation),
     u_viewMatrix: () => viewMatrix,
     u_projectionMatrix: () => projectionMatrix,
-    u_viewPos: () => viewPos,
-    u_lightPos: () => lightPos,
+    u_viewPosition: () => viewPos,
+    u_lightPosition: () => lightPos,
+    u_lightXform: () => lightXform,
     u_threshold1: () => cubeSize / 2 - cubeSize / numberOfSegments,
     u_threshold2: () => cubeSize / 2,
   },
@@ -311,6 +383,7 @@ const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
     [0, geoTextureDiffuse],
     [1, geoTextureSpecular],
     [2, geoTextureNormal],
+    [3, shadowDepthTexture],
   ],
   cullFace: gl.BACK,
   depthTest: gl.LESS,
@@ -537,8 +610,64 @@ gl.uniformMatrix4fv(skyboxProjectionMatrixUniform, false, projectionMatrix);
 gl.uniform1i(skyboxTextureUniform, 0);
 
 // =====================================================================
+// Shadow Mapping
+// =====================================================================
+
+const shadowVSSource = `#version 300 es
+    precision highp float;
+
+    uniform mat4 u_modelMatrix;
+    uniform mat4 u_lightXform;
+    uniform mat4 u_lightProjection;
+
+    in vec3 a_pos;
+
+    void main()
+    {
+        gl_Position = u_lightProjection * u_lightXform * u_modelMatrix * vec4(a_pos, 1.0);
+    }
+`;
+
+const shadowFSSource = `#version 300 es
+    precision mediump float;
+
+    void main() {}
+`;
+
+const shadowShader = glance.createShader(
+  gl,
+  "shadow-shader",
+  shadowVSSource,
+  shadowFSSource,
+  {
+    u_lightProjection: lightProjection,
+  }
+);
+
+const shadowFramebuffer = glance.createFramebuffer(
+  gl,
+  "shadow-framebuffer",
+  null,
+  shadowDepthTexture
+);
+
+const shadowDrawCalls = [
+  glance.createDrawCall(gl, shadowShader, mazeVAO, {
+    uniforms: {
+      u_modelMatrix: () =>
+        Mat4.fromTranslationY(statueOffset).rotateY(statueRotation),
+      u_lightXform: () => lightXform,
+    },
+    cullFace: gl.BACK,
+    depthTest: gl.LESS,
+  }),
+];
+
+// =====================================================================
 // Render Loop
 // =====================================================================
+
+const framebufferStack = new glance.FramebufferStack();
 
 setRenderLoop((time) => {
   // Do not draw anything until all textures are loaded.
@@ -553,32 +682,42 @@ setRenderLoop((time) => {
   viewMatrix.lookAt(viewPos, Vec3.zero(), Vec3.yAxis());
 
   // Update the light position
-  lightPos.set(
-    Math.cos(time * lightSpeed) * lightRadius,
-    lightDistance,
-    Math.sin(time * lightSpeed) * lightRadius
-  );
+  lightPos
+    .set(0, 0, -1)
+    .rotateX(lightTilt)
+    .rotateY(time * lightRotationSpeed);
+  lightXform.lookAt(lightPos, origin, up);
 
+  // Render shadow map
+  framebufferStack.push(gl, shadowFramebuffer);
   {
-    // Draw the skybox
-    gl.useProgram(skyboxShaderProgram);
-
-    // Textures.
-    gl.activeTexture(gl.TEXTURE0 + 0);
-    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
-
-    // Uniforms.
-    gl.uniformMatrix4fv(skyboxViewMatrixUniform, false, viewMatrix);
-
-    // Draw Call Parameters
-    gl.disable(gl.CULL_FACE);
-
-    // VAO
-    gl.bindVertexArray(skyboxVAO);
-
-    // Draw Call
-    gl.drawElements(gl.TRIANGLES, skyboxIndexData.length, gl.UNSIGNED_SHORT, 0);
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      for (const drawCall of shadowDrawCalls) {
+          glance.performDrawCall(gl, drawCall, time);
+      }
   }
+  framebufferStack.pop(gl);
+
+    {
+      // Draw the skybox
+      gl.useProgram(skyboxShaderProgram);
+
+      // Textures.
+      gl.activeTexture(gl.TEXTURE0 + 0);
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+
+      // Uniforms.
+      gl.uniformMatrix4fv(skyboxViewMatrixUniform, false, viewMatrix);
+
+      // Draw Call Parameters
+      gl.disable(gl.CULL_FACE);
+
+      // VAO
+      gl.bindVertexArray(skyboxVAO);
+
+      // Draw Call
+      gl.drawElements(gl.TRIANGLES, skyboxIndexData.length, gl.UNSIGNED_SHORT, 0);
+    }
 
   // Render the scene
   glance.performDrawCall(gl, bulbDrawCall, time);
