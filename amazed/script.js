@@ -73,25 +73,16 @@ const farPlane = 14;
 
 const cameraSpeed = 0.003;
 const zoomSpeed = 0.2;
-const minZoom = 1.5;
+const minZoom = 0.5;
 const maxZoom = 10.0;
 const minPan = -Infinity;
 const maxPan = Infinity;
 const minTilt = Math.PI / -2;
 const maxTilt = Math.PI / 2;
 
-const lightDistance = 0.25;
-const lightRadius = 2;
-const lightSpeed = 0.0002;
-
-// Scene settings
-const groundOffset = -0.75;
-const statueOffset = 0;
-const statueRotation = 0;
-
 // Light settings
 const lightProjection = Mat4.ortho(-0.5, 0.5, -0.8, 0.95, 0.3, 4.1);
-const lightRotationSpeed = 0.0003;
+const lightRotationSpeed = 0.0002;
 const lightTilt = 0.4;
 
 // =====================================================================
@@ -140,8 +131,8 @@ const lightXform = Mat4.identity();
 const shadowDepthTexture = glance.createTexture(
   gl,
   "shadow-depth",
-  1024,
-  1024,
+  2048,
+  2048,
   gl.TEXTURE_2D,
   null,
   {
@@ -179,9 +170,6 @@ const vertexShaderSource = `#version 300 es
     out vec3 f_normal;
     out vec3 f_fragPosWS;
     out vec4 f_fragPosLS;
-    out vec3 f_viewPosWS;
-    out vec3 f_lightDirWS;
-    out vec3 f_normalWS;
 
     void main() {
         vec3 normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
@@ -197,10 +185,7 @@ const vertexShaderSource = `#version 300 es
         f_viewPos = worldToTangent * u_viewPosition;
 
         f_normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
-        f_normalWS = normalize(mat3(u_modelMatrix) * a_normal);
         f_texCoord = a_texCoord;
-        f_viewPosWS = u_viewPosition;
-        f_lightDirWS = normalize(u_lightPosition);
 
         f_fragPosWS = worldPosition.xyz;
         f_fragPosLS = u_lightProjection * u_lightXform * worldPosition;
@@ -230,9 +215,6 @@ const fragmentShaderSource = `#version 300 es
     in vec3 f_viewPos;
     in vec3 f_normal;
     in vec3 f_fragPosWS;
-    in vec3 f_viewPosWS;
-    in vec3 f_lightDirWS;
-    in vec3 f_normalWS;
     in vec4 f_fragPosLS;
 
     out vec4 o_fragColor;
@@ -249,15 +231,14 @@ const fragmentShaderSource = `#version 300 es
         vec3 normal = normalize(texNormal * (255./128.) - 1.0);
         vec3 lightDir = normalize(f_lightPos - f_worldPosTangent);
         vec3 viewDir = normalize(f_viewPos - f_worldPosTangent);
-        vec3 viewDirection = normalize(f_viewPosWS - f_fragPosWS);
-        vec3 halfWay = normalize(viewDir + f_lightDirWS);
-
-        // ambient
-        vec3 ambient = texDiffuse * u_ambient;
+        vec3 halfWay = normalize(viewDir + lightDir);
 
         // diffuse
         float diffuseIntensity = max(dot(normal, lightDir), 0.0);
         vec3 diffuse = texDiffuse * diffuseIntensity * u_lightColor * u_diffuse;
+
+        // ambient
+        vec3 ambient = texDiffuse * u_ambient;
 
         // specular
         float specularIntensity = pow(max(dot(normal, halfWay), 0.0), u_shininess);
@@ -309,7 +290,7 @@ const mazeShader = glance.createShader(
   {
     u_lightProjection: lightProjection,
     u_modelMatrix: Mat4.identity(),
-    u_ambient: 0.2,
+    u_ambient: 0.3,
     u_diffuse: 0.9,
     u_specular: 0.15,
     u_shininess: 128,
@@ -370,7 +351,7 @@ const geoTextureNormal = await glance.loadTextureNow(
 const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   uniforms: {
     u_modelMatrix: () =>
-      Mat4.fromTranslationY(statueOffset).rotateY(statueRotation),
+      Mat4.identity(),
     u_viewMatrix: () => viewMatrix,
     u_projectionMatrix: () => projectionMatrix,
     u_viewPosition: () => viewPos,
@@ -389,64 +370,6 @@ const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   depthTest: gl.LESS,
 });
 
-// =====================================================================
-// Light Bulb
-// =====================================================================
-
-const bulbVSSource = `#version 300 es
-    precision highp float;
-
-    uniform mat4 u_modelMatrix;
-    uniform mat4 u_viewMatrix;
-    uniform mat4 u_projectionMatrix;
-
-    in vec3 a_pos;
-
-    void main() {
-        gl_Position = u_projectionMatrix * u_viewMatrix * u_modelMatrix * vec4(a_pos, 1.0);
-    }
-`;
-const bulbFSSource = `#version 300 es
-    precision mediump float;
-
-    out vec4 o_fragColor;
-
-    void main() {
-        o_fragColor = vec4(1.0);
-    }
-`;
-const bulbShader = glance.createShader(
-  gl,
-  "bulb-shader",
-  bulbVSSource,
-  bulbFSSource
-);
-
-const bulbGeo = glance.createSphere("bulb-geo", {
-  radius: 0.1,
-  longitudeBands: 32,
-  latitudeBands: 16,
-});
-const bulbIBO = glance.createIndexBuffer(gl, bulbGeo.indices);
-const bulbABO = glance.createAttributeBuffer(gl, "bulb-abo", {
-  a_pos: { data: bulbGeo.positions, height: 3 },
-});
-const bulbVAO = glance.createVAO(
-  gl,
-  "bulb-vao",
-  bulbIBO,
-  glance.buildAttributeMap(bulbShader, [bulbABO])
-);
-
-const bulbDrawCall = glance.createDrawCall(gl, bulbShader, bulbVAO, {
-  uniforms: {
-    u_modelMatrix: () => Mat4.fromTranslation(lightPos),
-    u_viewMatrix: () => viewMatrix,
-    u_projectionMatrix: () => projectionMatrix,
-  },
-  cullFace: gl.BACK,
-  depthTest: gl.LESS,
-});
 
 // =====================================================================
 // Skybox
@@ -655,7 +578,7 @@ const shadowDrawCalls = [
   glance.createDrawCall(gl, shadowShader, mazeVAO, {
     uniforms: {
       u_modelMatrix: () =>
-        Mat4.fromTranslationY(statueOffset).rotateY(statueRotation),
+        Mat4.identity(),
       u_lightXform: () => lightXform,
     },
     cullFace: gl.BACK,
@@ -720,6 +643,5 @@ setRenderLoop((time) => {
     }
 
   // Render the scene
-  glance.performDrawCall(gl, bulbDrawCall, time);
   glance.performDrawCall(gl, mazeDrawCall, time);
 });
