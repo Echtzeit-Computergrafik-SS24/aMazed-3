@@ -15,6 +15,7 @@ function generateLabyrinthCube(numberOfSegments, cubeSize) {
     depthSegments: numberOfSegments,
   });
   const labyrinth = generateLabyrinth(numberOfSegments);
+  console.log("labyrinth", labyrinth)
   const labyrinthCube = insetFaces(cube, numberOfSegments, cubeSize, labyrinth);
   return labyrinthCube;
 }

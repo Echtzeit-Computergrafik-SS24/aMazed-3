@@ -305,8 +305,8 @@ const mazeShader = glance.createShader(
 );
 
 // Create the maze cube
-const numberOfSegments = 17; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
-const cubeSize = .75;
+const numberOfSegments = 7; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const cubeSize = 1;
 const mazeCube = MazeCube.create(glance.Mat4.identity(), cubeSize, numberOfSegments);
 
 // tiling size
@@ -378,38 +378,22 @@ const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
 
 // movement bindings
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'ArrowUp') {
-      // mazeCube.setModelMatrix(mazeCube.getModelMatrix().rotateX(Math.PI/8))
-      // playerCube.setModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([playerWidth, playerHeight, playerDepth]).mul(directionMapping["up"])))
+  switch (event.key) {
+    case 'ArrowUp':
       playerCube.moveForward()
-      // console.log("up")
-  } else if (event.key === 'ArrowDown') {
-      // playerCube.setModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([playerWidth, playerHeight, playerDepth]).mul(directionMapping["down"])))
+      break;
+    case 'ArrowDown':
       playerCube.moveBackward()
-      // console.log("down")
-  } else if (event.key === 'ArrowLeft') {
-      // playerCube.setModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([playerWidth, playerHeight, playerDepth]).mul(directionMapping["left"])))
-      playerCube.moveLeft()
-  } else if (event.key === 'ArrowRight') {
-      // playerCube.setModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([playerWidth, playerHeight, playerDepth]).mul(directionMapping["right"])))
+      break;
+    case 'ArrowRight':
       playerCube.moveRight()
-      // console.log("right")
-  } else if (event.key == 'w'){
-      // mazeCube.updateModelMatrix(glance.Mat4.fromRotationX(Math.PI/8))
-      mazeCube.updateModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([0, 0.1, 0])))
-  } else if (event.key == 's'){
-      // mazeCube.updateModelMatrix(glance.Mat4.fromRotationX(-Math.PI/8))
-      mazeCube.updateModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([0, -0.1, 0])))
-  } else if (event.key == 'a'){
-      // mazeCube.updateModelMatrix(glance.Mat4.fromRotationY(-Math.PI/8))
-      mazeCube.updateModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([-0.1, 0, 0])))
-  } else if (event.key == 'd'){
-      // mazeCube.updateModelMatrix(glance.Mat4.fromRotationY(Math.PI/8))
-      mazeCube.updateModelMatrix(glance.Mat4.fromTranslation(glance.Vec3.fromArray([0.1, 0, 0])))
-  } else if (event.key == ' '){
-      console.log("direction mapping", playerCube.directionMapping) 
+      break;
+    case 'ArrowLeft':
+      playerCube.moveLeft()
+      break;
   }
-  });
+});
+  
 
 const playerVertexShaderSource = `#version 300 es
     precision highp float;

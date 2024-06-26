@@ -43,6 +43,18 @@ function getSegment(geo, side, nthSegment)
     let segNormals = getSegmentNormals(segIndices, geo.normals);
     return {'indices': segIndices, 'positions': segPositions, 'normals': segNormals};
 }
+function convertSegmentToXY(nthSegment, numSegments)
+{
+    let x = nthSegment % numSegments;
+    let y = numSegments - Math.floor(nthSegment / numSegments) - 1;
+
+    return [x, y];
+}
+function convertSegmentToSideNth(x, y, numSegments)
+{
+    let nthSegment = Math.abs(y - numSegments + 1) * numSegments + x ;
+    return nthSegment;
+}
 
 
 // goal of this class is to add further functionality to geometries
@@ -204,20 +216,20 @@ class Cube extends GameObject {
 }
 
 class MazeCube extends Cube {
-    constructor(geo, modelMatrix, size, numSegments)
+    constructor(geo, modelMatrix, size, numSegments, labyrinth)
     {
         super(geo, modelMatrix, size, numSegments);
+        this.labyrinth = labyrinth;
 
     }
     static create(modelMatrix, size, numberOfSegments)
     {
         let cube = Cube.create(modelMatrix, size, numberOfSegments);
         let labyrinth = generateLabyrinth(numberOfSegments);
+        let mazeCube = new MazeCube(cube.geo, cube.getModelMatrix(), cube.size, cube.numSegments, labyrinth);
         insetFaces(cube.geo, numberOfSegments, size, labyrinth);
-        let mazeCube = new MazeCube(cube.geo, cube.getModelMatrix(), cube.size, cube.numSegments);
         mazeCube.segments = cube.segments;
-        console.log("mazeCube segments", mazeCube.segments)
-
+        console.log("labyrinth", labyrinth)
         return mazeCube;
     }
 
@@ -232,7 +244,6 @@ class Player extends Cube {
         this.nthSegment = null;
         this.currSegment = null;
         this.directionMapping = null;
-        this.initialMM = null;
         this.moving = false;
     }
     static create(mazeCube, side, nthSegment, numSegments)
@@ -250,6 +261,7 @@ class Player extends Cube {
         let player = new Player(geo, glance.Mat4.identity(), size, numSegments, mazeCube);
         player.side = side;
         player.nthSegment = nthSegment;
+        
         player.initSegment(side, nthSegment);
         player.initModelMatrix();
         player.initOrientation();
@@ -258,16 +270,19 @@ class Player extends Cube {
     }
     initSegment(side, nthSegment)
     {
-        this.currSegment = this.parent.getSegment(side, nthSegment);
+        let coord = this.parent.labyrinth[0][Math.floor(Math.random()*this.parent.labyrinth[0].length)];
+        console.log("random coord", coord)
+        let nth = convertSegmentToSideNth(coord[0], coord[1], this.parent.numSegments)
+        side = 0
+        this.currSegment = this.parent.getSegment(side, nth);
     }
     initModelMatrix()
     {
         let offset = glance.Vec3.fromArray(this.currSegment.normals[0]).scale(this.size/2);
         this.initNormal = glance.Vec3.fromArray(this.currSegment.normals[0]);
         let pos = glance.Vec3.fromArray(this.currSegment.center);
-        pos.add(offset); 
+        pos.sub(offset);  // subtract, to reach the insetted surface
         this.updateModelMatrix(glance.Mat4.fromTranslation(pos));
-        this.initialMM = this.getModelMatrixNoParent().clone();
     }
     initOrientation()
     {
@@ -351,6 +366,10 @@ class Player extends Cube {
         }
 
     }
+    isWall(side, coord)
+    {
+        return this.parent.labyrinth[side].some(entry => entry[0] === coord[0] && entry[1] === coord[1]);
+    }
     moveForward()
     {
         if (this.moving) return;
@@ -361,9 +380,13 @@ class Player extends Cube {
         let startingSegment = this.parent.getSegment(this.side, this.nthSegment);  // get the segment without updated positions
         
         // calc what the position would be
-        let pos = offset.clone().applyMat4(this.getModelMatrix())
+        // let currPos = this.getModelMatrix()
+        let segCenter = glance.Vec3.fromArray(startingSegment.center)
+        let segNormal = glance.Vec3.fromArray(this.currSegment.normals[0]);
+        let pos = segCenter.add(segNormal.clone().scale(this.size/2))
+        // let pos = offset.clone().applyMat4(this.getModelMatrix().translate(currNormal.scale(this.size/2)))
 
-        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions 
+        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
         let edge = false;
         let animationDirection = this.directionMapping["forward"].clone()
         let rotAxis = this.directionMapping["right"].clone()
@@ -378,13 +401,18 @@ class Player extends Cube {
         this.animate(startingSegment, animationDirection, rotAxis, edge, final);
 
         // calulate the current segment 
-        segment = this.getSegmentByPos(offset.clone().applyMat4(this.getModelMatrix()));  // using modelMatrix because we need current global pos
+        // let reverseOffset = this.directionMapping["orthogonal"].clone().scale(this.size/2)
+        segment = this.getSegmentByPos(final.getTranslation().add(segNormal.clone().scale(this.size)));  // using modelMatrix because we need current global pos
         this.side = segment[2];
         this.nthSegment = segment[3];
         this.currSegment = segment[0];
-
-        console.log(segment)
         
+        console.log("segment", segment)
+        let converted = convertSegmentToXY(this.nthSegment, this.parent.numSegments)
+        console.log("converted", converted)
+        console.log("unconverted", convertSegmentToSideNth(converted[0], converted[1], this.parent.numSegments))
+        console.log("is not wall", this.isWall(this.side, convertSegmentToXY(this.nthSegment, this.parent.numSegments)))
+
     }
     moveBackward()
     {
@@ -418,23 +446,26 @@ class Player extends Cube {
         this.nthSegment = segment[3];
         this.currSegment = segment[0];
 
-        console.log(segment)
+        console.log("segment", segment)
+        let converted = convertSegmentToXY(this.nthSegment, this.parent.numSegments)
+        console.log("converted", converted)
+        console.log("unconverted", convertSegmentToSideNth(converted[0], converted[1], this.parent.numSegments))
+
+        console.log(this.isWall(this.side, convertSegmentToXY(this.nthSegment, this.parent.numSegments)))
+
+
     }
     moveLeft()
     {
         if (this.moving) return;
         this.moving = true;
 
-        console.log("calculating offset")
         let offset = this.directionMapping["right"].clone().scale(this.size);  // don't know why, but left and right switched :D
-        console.log("calculating starting segment")
         let startingSegment = this.parent.getSegment(this.side, this.nthSegment);  // get the segment without updated positions
         
         // calc what the position would be
-        console.log("determining whether edge")
         let pos = offset.clone().applyMat4(this.getModelMatrix())
 
-        console.log("determining whether edge")
         let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions 
         let edge = false;
         let animationDirection = this.directionMapping["right"].clone()
@@ -446,7 +477,6 @@ class Player extends Cube {
             this.updateOrientation(this.directionMapping["backward"].clone(), Math.PI/2);  // update orientation coodinate system as we are now on a different side
             edge = true;
         }
-        console.log("animating")
 
         let final = glance.Mat4.fromTranslation(offset).mul(this.getModelMatrixNoParent());
         this.animate(startingSegment, animationDirection, rotAxis, edge, final);
@@ -457,7 +487,14 @@ class Player extends Cube {
         this.nthSegment = segment[3];
         this.currSegment = segment[0];
 
-        console.log(segment)
+        console.log("segment", segment)
+        let converted = convertSegmentToXY(this.nthSegment, this.parent.numSegments)
+        console.log("converted", converted)
+        console.log("unconverted", convertSegmentToSideNth(converted[0], converted[1], this.parent.numSegments))
+
+        console.log(this.isWall(this.side, convertSegmentToXY(this.nthSegment, this.parent.numSegments)))
+
+
 
     }
     moveRight()
@@ -465,49 +502,53 @@ class Player extends Cube {
         if (this.moving) return;
         this.moving = true;
 
-         // implementing animation
-         let offset = this.directionMapping["left"].clone().scale(this.size);  // don't know why, but left and right switched :D
-         let startingSegment = this.parent.getSegment(this.side, this.nthSegment);  // get the segment without updated positions
-         
-         // calc what the position would be
-         let pos = offset.clone().applyMat4(this.getModelMatrix())
- 
-         let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
-         let edge = false;
-         let animationDirection = this.directionMapping["left"].clone()
-         let rotAxis = this.directionMapping["forward"].clone()
-         if (segment === undefined)  // player would leave cube surface
-         {
-             console.log("edge")
-             offset.add(this.directionMapping["orthogonal"].clone().scale(-this.size));  // add a move inward towards the cube, to reach surface again and create the wrapping effect
-             this.updateOrientation(this.directionMapping["forward"].clone(), Math.PI/2);  // update orientation coodinate system as we are now on a different side
-             edge = true;
-         }
-         let final = glance.Mat4.fromTranslation(offset).mul(this.getModelMatrixNoParent());
-         this.animate(startingSegment, animationDirection, rotAxis, edge, final);
- 
-         // calulate the current segment 
-         segment = this.getSegmentByPos(offset.clone().applyMat4(this.getModelMatrix()));  // using modelMatrix because we need current global pos
-         this.side = segment[2];
-         this.nthSegment = segment[3];
-         this.currSegment = segment[0];
- 
-         console.log(segment)
+        // implementing animation
+        let offset = this.directionMapping["left"].clone().scale(this.size);  // don't know why, but left and right switched :D
+        let startingSegment = this.parent.getSegment(this.side, this.nthSegment);  // get the segment without updated positions
+        
+        // calc what the position would be
+        let pos = offset.clone().applyMat4(this.getModelMatrix())
+
+        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
+        let edge = false;
+        let animationDirection = this.directionMapping["left"].clone()
+        let rotAxis = this.directionMapping["forward"].clone()
+        if (segment === undefined)  // player would leave cube surface
+        {
+            console.log("edge")
+            offset.add(this.directionMapping["orthogonal"].clone().scale(-this.size));  // add a move inward towards the cube, to reach surface again and create the wrapping effect
+            this.updateOrientation(this.directionMapping["forward"].clone(), Math.PI/2);  // update orientation coodinate system as we are now on a different side
+            edge = true;
+        }
+        let final = glance.Mat4.fromTranslation(offset).mul(this.getModelMatrixNoParent());
+        this.animate(startingSegment, animationDirection, rotAxis, edge, final);
+
+        // calulate the current segment 
+        segment = this.getSegmentByPos(offset.clone().applyMat4(this.getModelMatrix()));  // using modelMatrix because we need current global pos
+        this.side = segment[2];
+        this.nthSegment = segment[3];
+        this.currSegment = segment[0];
+
+        console.log("segment", segment)
+        let converted = convertSegmentToXY(this.nthSegment, this.parent.numSegments)
+        console.log("converted", converted)
+        console.log("unconverted", convertSegmentToSideNth(converted[0], converted[1], this.parent.numSegments))
+        console.log(this.isWall(this.side, convertSegmentToXY(this.nthSegment, this.parent.numSegments)))
+
     }
     animate(startingSegment, direction, rotAxis, edge=false, final)
     {
         const totalRotation = edge ? Math.PI : Math.PI/2; // 90 degrees in radians
 
-        const baseDur = 100 // Total duration of the animation in milliseconds
+        const baseDur = 500 // Total duration of the animation in milliseconds
         const dur = edge ? baseDur*2: baseDur; // take longer when wrapping around an edge
         const frameRate = 120; // Frames per second
         const interval = 1000 / frameRate; // Interval in milliseconds
         const totalFrames = Math.ceil((dur / 1000) * frameRate);
 
         let currPos = this.getModelMatrixNoParent().getTranslation();
-        console.log("startingSegment", startingSegment.center)
-        let halfwayPoint = glance.Vec3.fromArray(startingSegment.center).add(direction.clone().scale(this.size/2));
-        console.log("halfwayPoint", halfwayPoint)
+        let insetSegmentCenter = glance.Vec3.fromArray(startingSegment.center).sub(glance.Vec3.fromArray(startingSegment.normals[0]).scale(this.size));
+        let halfwayPoint = insetSegmentCenter.add(direction.clone().scale(this.size/2));
         
         let offset = halfwayPoint.clone().sub(currPos);
         let reverseOffset = offset.clone().scale(-1);
