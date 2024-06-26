@@ -82,7 +82,7 @@ const minTilt = Math.PI / -2;
 const maxTilt = Math.PI / 2;
 
 // Light settings
-const lightProjection = Mat4.ortho(-0.5, 0.5, -0.8, 0.95, 0.3, 4.1);
+const lightProjection = Mat4.ortho(-1., 1., -1., 1., 0.1, 2.);
 const lightRotationSpeed = 0.0002;
 const lightTilt = 0.4;
 const lightDirection = new glance.Vec3(-1, 2, 4).normalize();
@@ -278,7 +278,7 @@ const fragmentShaderSource = `#version 300 es
             return 1.0;
         }
 
-        float bias = 0.002;
+        float bias = 0.01;
         float closestDepth = texture(u_texShadow, projCoords.xy).r;
         return projCoords.z - bias > closestDepth  ? 0.0 : 1.0;
     }
