@@ -133,6 +133,7 @@ class Cube extends GameObject {
             });
         let cube = new Cube(geo, modelMatrix, size, numSegments);
         cube.initSegments();
+        console.log("segments", cube.segments)
         return cube;
     }
     initSegments()
@@ -214,7 +215,9 @@ class MazeCube extends Cube {
         let labyrinth = generateLabyrinth(numberOfSegments);
         insetFaces(cube.geo, numberOfSegments, size, labyrinth);
         let mazeCube = new MazeCube(cube.geo, cube.getModelMatrix(), cube.size, cube.numSegments);
-        mazeCube.initSegments();
+        mazeCube.segments = cube.segments;
+        console.log("mazeCube segments", mazeCube.segments)
+
         return mazeCube;
     }
 
@@ -331,7 +334,8 @@ class Player extends Cube {
         let reverseOffset = currNormal.clone().scale(-this.size/2);
         pos.add(reverseOffset);  // from center of player to surface of maze cube
         
-        let parentSegments = this.parent.getCurrentSegments();
+        // let parentSegments = this.parent.getCurrentSegments();  TODO: make getSegmentByPos invariant to modelMatrix
+        let parentSegments = this.parent.getSegments();
         for (let i = 0; i < 6; i++)
         {
             for (let j = 0; j < parentSegments[i].length; j++)
@@ -421,34 +425,39 @@ class Player extends Cube {
         if (this.moving) return;
         this.moving = true;
 
-         // implementing animation
-         let offset = this.directionMapping["right"].clone().scale(this.size);  // don't know why, but left and right switched :D
-         let startingSegment = this.parent.getSegment(this.side, this.nthSegment);  // get the segment without updated positions
-         
-         // calc what the position would be
-         let pos = offset.clone().applyMat4(this.getModelMatrix())
- 
-         let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions 
-         let edge = false;
-         let animationDirection = this.directionMapping["right"].clone()
-         let rotAxis = this.directionMapping["backward"].clone()
-         if (segment === undefined)  // player would leave cube surface
-         {
-             console.log("edge")
-             offset.add(this.directionMapping["orthogonal"].clone().scale(-this.size));  // add a move inward towards the cube, to reach surface again and create the wrapping effect
-             this.updateOrientation(this.directionMapping["backward"].clone(), Math.PI/2);  // update orientation coodinate system as we are now on a different side
-             edge = true;
-         }
-         let final = glance.Mat4.fromTranslation(offset).mul(this.getModelMatrixNoParent());
-         this.animate(startingSegment, animationDirection, rotAxis, edge, final);
- 
-         // calulate the current segment 
-         segment = this.getSegmentByPos(offset.clone().applyMat4(this.getModelMatrix()));  // using modelMatrix because we need current global pos
-         this.side = segment[2];
-         this.nthSegment = segment[3];
-         this.currSegment = segment[0];
- 
-         console.log(segment)
+        console.log("calculating offset")
+        let offset = this.directionMapping["right"].clone().scale(this.size);  // don't know why, but left and right switched :D
+        console.log("calculating starting segment")
+        let startingSegment = this.parent.getSegment(this.side, this.nthSegment);  // get the segment without updated positions
+        
+        // calc what the position would be
+        console.log("determining whether edge")
+        let pos = offset.clone().applyMat4(this.getModelMatrix())
+
+        console.log("determining whether edge")
+        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions 
+        let edge = false;
+        let animationDirection = this.directionMapping["right"].clone()
+        let rotAxis = this.directionMapping["backward"].clone()
+        if (segment === undefined)  // player would leave cube surface
+        {
+            console.log("edge")
+            offset.add(this.directionMapping["orthogonal"].clone().scale(-this.size));  // add a move inward towards the cube, to reach surface again and create the wrapping effect
+            this.updateOrientation(this.directionMapping["backward"].clone(), Math.PI/2);  // update orientation coodinate system as we are now on a different side
+            edge = true;
+        }
+        console.log("animating")
+
+        let final = glance.Mat4.fromTranslation(offset).mul(this.getModelMatrixNoParent());
+        this.animate(startingSegment, animationDirection, rotAxis, edge, final);
+
+        // calulate the current segment 
+        segment = this.getSegmentByPos(offset.clone().applyMat4(this.getModelMatrix()));  // using modelMatrix because we need current global pos
+        this.side = segment[2];
+        this.nthSegment = segment[3];
+        this.currSegment = segment[0];
+
+        console.log(segment)
 
     }
     moveRight()
@@ -463,7 +472,7 @@ class Player extends Cube {
          // calc what the position would be
          let pos = offset.clone().applyMat4(this.getModelMatrix())
  
-         let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions 
+         let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
          let edge = false;
          let animationDirection = this.directionMapping["left"].clone()
          let rotAxis = this.directionMapping["forward"].clone()
