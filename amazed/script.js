@@ -1,4 +1,5 @@
 import * as glance from "../glance/js/index.js";
+import { Cube, MazeCube, Player } from "./gameObjects.js";
 import * as amazed from "./amazed.js";
 const { Vec3, Mat4 } = glance;
 
@@ -84,6 +85,7 @@ const maxTilt = Math.PI / 2;
 const lightProjection = Mat4.ortho(-0.5, 0.5, -0.8, 0.95, 0.3, 4.1);
 const lightRotationSpeed = 0.0002;
 const lightTilt = 0.4;
+const lightDirection = new glance.Vec3(-1, 2, 4).normalize();
 
 // =====================================================================
 // Game State
@@ -303,21 +305,21 @@ const mazeShader = glance.createShader(
 );
 
 // Create the maze cube
-const numberOfSegments = 17; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
-const cubeSize = .5;
-const mazeCube = amazed.generateLabyrinthCube(numberOfSegments, cubeSize);
+const numberOfSegments_ = 3; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const cubeSize_ = .75;
+const mazeCube = MazeCube.create(glance.Mat4.identity(), cubeSize_, numberOfSegments_);
 
 // tiling size
-mazeCube.texCoords = mazeCube.texCoords.map((c, i) =>
+mazeCube.geo.texCoords = mazeCube.geo.texCoords.map((c, i) =>
   i % 2 === 0 ? c * 8 : c * 4
 );
-
-const mazeIBO = glance.createIndexBuffer(gl, mazeCube.indices);
+// Prep mazeCube
+const mazeIBO = glance.createIndexBuffer(gl, mazeCube.geo.indices);
 const mazeABO = glance.createAttributeBuffer(gl, "maze-abo", {
-  a_pos: { data: mazeCube.positions, height: 3 },
-  a_normal: { data: mazeCube.normals, height: 3 },
-  a_texCoord: { data: mazeCube.texCoords, height: 2 },
-  a_tangent: { data: mazeCube.tangents, height: 3 },
+  a_pos: { data: mazeCube.geo.positions, height: 3 },
+  a_normal: { data: mazeCube.geo.normals, height: 3 },
+  a_texCoord: { data: mazeCube.geo.texCoords, height: 2 },
+  a_tangent: { data: mazeCube.geo.tangents, height: 3 },
 });
 const mazeVAO = glance.createVAO(
   gl,
@@ -350,15 +352,14 @@ const geoTextureNormal = await glance.loadTextureNow(
 
 const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   uniforms: {
-    u_modelMatrix: () =>
-      Mat4.identity(),
+    u_modelMatrix: () => mazeCube.getModelMatrix(),
     u_viewMatrix: () => viewMatrix,
     u_projectionMatrix: () => projectionMatrix,
     u_viewPosition: () => viewPos,
     u_lightPosition: () => lightPos,
     u_lightXform: () => lightXform,
-    u_threshold1: () => cubeSize / 2 - cubeSize / numberOfSegments,
-    u_threshold2: () => cubeSize / 2,
+    u_threshold1: () => mazeCube.size / 2 - mazeCube.size / numberOfSegments,
+    u_threshold2: () => mazeCube.size / 2,
   },
   textures: [
     [0, geoTextureDiffuse],
@@ -369,6 +370,182 @@ const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   cullFace: gl.BACK,
   depthTest: gl.LESS,
 });
+
+
+// =====================================================================
+// Test cube
+// =====================================================================
+
+const playerVertexShaderSource = `#version 300 es
+        precision highp float;
+
+        uniform mat4 u_modelMatrix;
+        uniform mat4 u_viewMatrix;
+        uniform mat4 u_projectionMatrix;
+
+        in vec3 a_pos;
+        in vec3 a_normal;
+        in vec2 a_texCoord;
+
+        out vec3 f_worldPos;
+        out vec3 f_normal;
+        out vec2 f_texCoord;
+
+        void main() {
+            vec4 worldPos = u_modelMatrix * vec4(a_pos, 1.0);   
+            gl_Position = u_projectionMatrix * u_viewMatrix * worldPos;
+            f_worldPos = worldPos.xyz;
+            f_normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
+            f_texCoord = a_texCoord;
+        }
+    `;
+const playerFragmentShaderSource = `#version 300 es
+  precision mediump float;
+
+  uniform vec3 u_viewPosition;
+  uniform vec3 u_lightDirection;
+  uniform sampler2D u_texDiffuse;
+
+  in vec3 f_worldPos;
+  in vec3 f_normal;
+  in vec2 f_texCoord;
+
+  out vec4 o_fragColor;
+
+  void main() {
+      vec3 normal = normalize(f_normal);
+      vec3 viewDirection = normalize(f_worldPos - u_viewPosition);
+      vec3 halfWay = normalize(viewDirection + u_lightDirection);
+
+      // texture
+      vec3 texDiffuse = texture(u_texDiffuse, f_texCoord).rgb;
+
+      // ambient
+      vec3 ambient = vec3(0.07) * texDiffuse;
+
+      // diffuse
+      float diffuseIntensity = max(0.0, dot(normal, u_lightDirection));
+      vec3 diffuse = diffuseIntensity * texDiffuse;
+
+      // specular
+      vec3 specular = pow(max(0.0, dot(normal, halfWay)), 32.0) * vec3(1.0);
+
+      // final color
+      o_fragColor = vec4(vec3(ambient + diffuse + specular), 1.0);
+      //o_fragColor = vec4(1.0, 0., 0., 1.0);
+    }
+  `;
+  
+  const playerShader = glance.createShader(
+    gl,
+    "player-shader",
+    playerVertexShaderSource,
+    playerFragmentShaderSource,
+    {
+        u_viewMatrix: viewMatrix,
+        u_modelMatrix: glance.Mat4.identity(),
+        u_projectionMatrix: projectionMatrix,
+        u_viewPosition: viewPos,
+        u_lightDirection: lightDirection,
+        u_texDiffuse: 0,
+    },
+  );
+
+  const boxShader = glance.createShader(
+    gl,
+    "player-shader",
+    playerVertexShaderSource,
+    playerFragmentShaderSource,
+    {
+        u_viewMatrix: viewMatrix,
+        u_modelMatrix: glance.Mat4.identity(),
+        u_projectionMatrix: projectionMatrix,
+        u_viewPosition: viewPos,
+        u_lightDirection: lightDirection,
+        u_texDiffuse: 0,
+    },
+  );
+const cubeSize = 1
+const numberOfSegments = 17;
+const cube = Cube.create(glance.Mat4.identity(), cubeSize, numberOfSegments);
+const cubeIBO = glance.createIndexBuffer(gl, cube.geo.indices);
+const cubeABO = glance.createAttributeBuffer(gl, "cube-abo", {
+  a_pos: { data: cube.geo.positions, height: 3 },
+  a_normal: { data: cube.geo.normals, height: 3 },
+  a_texCoord: { data: cube.geo.texCoords, height: 2 },
+  a_tangent: { data: cube.geo.tangents, height: 3 },
+});
+const cubeVAO = glance.createVAO(
+  gl,
+  "cube-vao",
+  cubeIBO,
+  glance.buildAttributeMap(boxShader, [cubeABO])
+);
+const cubeTextureDiffuse = await glance.loadTextureNow(gl,
+  'https://echtzeit-computergrafik-ss24.github.io/img/polybox-diffuse.png'
+);
+const cubeDrawCall = glance.createDrawCall(gl,
+  boxShader,
+  cubeVAO,
+  {
+      uniforms: {
+          u_modelMatrix: () => cube.getModelMatrix(),
+      },
+      textures: [
+          [0, cubeTextureDiffuse],
+      ],
+      cullFace: gl.BACK,
+      depthTest: gl.LEQUAL,
+
+  }
+);
+
+
+// =====================================================================
+// Player
+// =====================================================================
+
+const side = 0;
+const nthSegment = 5
+
+
+
+
+// const playerCube = Player.create(mazeCube, side, nthSegment, numberOfSegments);
+const playerCube = Player.create(cube, side, nthSegment, numberOfSegments);
+
+// Prep playerCube
+const playerIBO = glance.createIndexBuffer(gl, playerCube.geo.indices);
+const playerABO = glance.createAttributeBuffer(gl, "player-abo", {
+  a_pos: { data: playerCube.geo.positions, height: 3 },
+  a_normal: { data: playerCube.geo.normals, height: 3 },
+  a_texCoord: { data: playerCube.geo.texCoords, height: 2 },
+  a_tangent: { data: playerCube.geo.tangents, height: 3 },
+});
+const playerVAO = glance.createVAO(
+  gl,
+  "player-vao",
+  playerIBO,
+  glance.buildAttributeMap(playerShader, [playerABO])
+);
+const playerTextureDiffuse = await glance.loadTextureNow(gl,
+  'https://echtzeit-computergrafik-ss24.github.io/img/polybox-diffuse.png'
+);
+const playerDrawCall = glance.createDrawCall(gl,
+  playerShader,
+  playerVAO,
+  {
+      uniforms: {
+          u_modelMatrix: () => playerCube.getModelMatrix(),
+      },
+      textures: [
+          [0, playerTextureDiffuse],
+      ],
+      cullFace: gl.BACK,
+      depthTest: gl.LEQUAL,
+  }
+);
+console.log(playerCube.getModelMatrix())
 
 
 // =====================================================================
@@ -643,5 +820,6 @@ setRenderLoop((time) => {
     }
 
   // Render the scene
-  glance.performDrawCall(gl, mazeDrawCall, time);
+  // glance.performDrawCall(gl, mazeDrawCall, time);
+  glance.performDrawCall(gl, playerDrawCall, time);
 });
