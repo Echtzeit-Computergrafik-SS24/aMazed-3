@@ -387,7 +387,7 @@ class Player extends Cube {
         let segNormal = glance.Vec3.fromArray(this.currSegment.normals[0]);
         let pos = segCenter.add(segNormal.clone().scale(this.size/2))
 
-        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
+        let segment = this.getSegmentByPos(pos.add(offset));  // get the segment pos with updated positions
         let edge = false;
         let animationDirection = this.directionMapping["forward"].clone()
         let rotAxis = this.directionMapping["right"].clone()
@@ -434,7 +434,7 @@ class Player extends Cube {
         let segNormal = glance.Vec3.fromArray(this.currSegment.normals[0]);
         let pos = segCenter.add(segNormal.clone().scale(this.size/2))
 
-        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
+        let segment = this.getSegmentByPos(pos.add(offset));  // get the segment pos with updated positions
         let edge = false;
         let animationDirection = this.directionMapping["backward"].clone()
         let rotAxis = this.directionMapping["left"].clone()
@@ -482,7 +482,7 @@ class Player extends Cube {
         let segNormal = glance.Vec3.fromArray(this.currSegment.normals[0]);
         let pos = segCenter.add(segNormal.clone().scale(this.size/2))
 
-        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
+        let segment = this.getSegmentByPos(pos.add(offset));  // get the segment pos with updated positions
         let edge = false;
         let animationDirection = this.directionMapping["right"].clone()
         let rotAxis = this.directionMapping["backward"].clone()
@@ -531,7 +531,7 @@ class Player extends Cube {
         let segNormal = glance.Vec3.fromArray(this.currSegment.normals[0]);
         let pos = segCenter.add(segNormal.clone().scale(this.size/2))
 
-        let segment = this.getSegmentByPos(pos);  // get the segment pos with updated positions
+        let segment = this.getSegmentByPos(pos.add(offset));  // get the segment pos with updated positions
         let edge = false;
         let animationDirection = this.directionMapping["left"].clone()
         let rotAxis = this.directionMapping["forward"].clone()
@@ -567,7 +567,7 @@ class Player extends Cube {
     {
         const totalRotation = edge ? Math.PI : Math.PI/2; // 90 degrees in radians
 
-        const baseDur = 500 // Total duration of the animation in milliseconds
+        const baseDur = 100 // Total duration of the animation in milliseconds
         const dur = edge ? baseDur*2: baseDur; // take longer when wrapping around an edge
         const frameRate = 120; // Frames per second
         const interval = 1000 / frameRate; // Interval in milliseconds
