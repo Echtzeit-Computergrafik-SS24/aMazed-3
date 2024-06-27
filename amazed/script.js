@@ -74,18 +74,15 @@ const farPlane = 14;
 
 const cameraSpeed = 0.003;
 const zoomSpeed = 0.2;
-const minZoom = 0.5;
+const minZoom = 1.0;
 const maxZoom = 10.0;
 const minPan = -Infinity;
 const maxPan = Infinity;
-const minTilt = Math.PI / -2;
-const maxTilt = Math.PI / 2;
+const minTilt = -Infinity;
+const maxTilt = Infinity;
 
 // Light settings
-const lightProjection = Mat4.ortho(-1., 1., -1., 1., 0.1, 2.);
-const lightRotationSpeed = 0.0002;
-const lightTilt = 0.4;
-const lightDirection = new glance.Vec3(-1, 2, 4).normalize();
+const lightProjection = Mat4.ortho(-1, 1, -1, 1, 0.1, 2);
 
 // =====================================================================
 // Game State
@@ -280,7 +277,7 @@ const fragmentShaderSource = `#version 300 es
 
         float bias = 0.01;
         float closestDepth = texture(u_texShadow, projCoords.xy).r;
-        return projCoords.z - bias > closestDepth  ? 0.0 : 1.0;
+        return projCoords.z - bias > closestDepth ? 0.0 : 1.0;
     }
 `;
 
@@ -305,9 +302,13 @@ const mazeShader = glance.createShader(
 );
 
 // Create the maze cube
-const numberOfSegments = 25; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const numberOfSegments = 17; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
-const mazeCube = MazeCube.create(glance.Mat4.identity(), cubeSize, numberOfSegments);
+const mazeCube = MazeCube.create(
+  glance.Mat4.identity(),
+  cubeSize,
+  numberOfSegments
+);
 
 // tiling size
 mazeCube.geo.texCoords = mazeCube.geo.texCoords.map((c, i) =>
@@ -371,29 +372,27 @@ const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   depthTest: gl.LESS,
 });
 
-
 // =====================================================================
 // Player
 // =====================================================================
 
 // movement bindings
-document.addEventListener('keydown', (event) => {
+document.addEventListener("keydown", (event) => {
   switch (event.key) {
-    case 'ArrowUp':
-      playerCube.moveForward()
+    case "ArrowUp":
+      playerCube.moveForward();
       break;
-    case 'ArrowDown':
-      playerCube.moveBackward()
+    case "ArrowDown":
+      playerCube.moveBackward();
       break;
-    case 'ArrowRight':
-      playerCube.moveRight()
+    case "ArrowRight":
+      playerCube.moveRight();
       break;
-    case 'ArrowLeft':
-      playerCube.moveLeft()
+    case "ArrowLeft":
+      playerCube.moveLeft();
       break;
   }
 });
-  
 
 const playerVertexShaderSource = `#version 300 es
     precision highp float;
@@ -422,7 +421,6 @@ const playerFragmentShaderSource = `#version 300 es
     precision mediump float;
 
     uniform vec3 u_viewPosition;
-    uniform vec3 u_lightDirection;
     uniform sampler2D u_texDiffuse;
 
     in vec3 f_worldPos;
@@ -432,42 +430,35 @@ const playerFragmentShaderSource = `#version 300 es
     out vec4 o_fragColor;
 
     void main() {
-        vec3 normal = normalize(f_normal);
-        vec3 viewDirection = normalize(f_worldPos - u_viewPosition);
-        vec3 halfWay = normalize(viewDirection + u_lightDirection);
+      float glowStrength = 1.0;
+      vec3 color = vec3(1.1, 1.0, 1.5);
 
-        // texture
-        vec3 texDiffuse = texture(u_texDiffuse, f_texCoord).rgb;
+      // Compute the distance from the fragment to the cube's center
+      float distance = length(f_texCoord - 0.5);
 
-        // ambient
-        vec3 ambient = vec3(0.07) * texDiffuse;
+      // Determine the glow factor based on distance
+      float glow = exp(-distance * glowStrength);
 
-        // diffuse
-        float diffuseIntensity = max(0.0, dot(normal, u_lightDirection));
-        vec3 diffuse = diffuseIntensity * texDiffuse;
+      // Calculate the lighting (ambient + diffuse)
+      vec3 result = glow * color;
 
-        // specular
-        vec3 specular = pow(max(0.0, dot(normal, halfWay)), 32.0) * vec3(1.0);
-
-        // final color
-        o_fragColor = vec4(vec3(ambient + diffuse + specular), 1.0);
-        //o_fragColor = vec4(1.0, 0., 0., 1.0);
+      // Combine the results
+      o_fragColor = vec4(result, 1.0);
     }
 `;
-  
-  const playerShader = glance.createShader(
-    gl,
-    "player-shader",
-    playerVertexShaderSource,
-    playerFragmentShaderSource,
-    {
-        u_viewPosition: viewPos,
-        u_lightDirection: lightDirection,
-        u_texDiffuse: 0,
-    },
-  );
+
+const playerShader = glance.createShader(
+  gl,
+  "player-shader",
+  playerVertexShaderSource,
+  playerFragmentShaderSource,
+  {
+    u_viewPosition: viewPos,
+    u_texDiffuse: 0,
+  }
+);
 const side = 0;
-const nthSegment = 5
+const nthSegment = 5;
 const playerCube = Player.create(mazeCube, side, nthSegment, numberOfSegments);
 
 // Prep playerCube
@@ -484,28 +475,21 @@ const playerVAO = glance.createVAO(
   playerIBO,
   glance.buildAttributeMap(playerShader, [playerABO])
 );
-const playerTextureDiffuse = await glance.loadTextureNow(gl,
-  'https://echtzeit-computergrafik-ss24.github.io/img/polybox-diffuse.png'
+const playerTextureDiffuse = await glance.loadTextureNow(
+  gl,
+  "https://echtzeit-computergrafik-ss24.github.io/img/polybox-diffuse.png"
 );
-const playerDrawCall = glance.createDrawCall(gl,
-  playerShader,
-  playerVAO,
-  {
-      uniforms: {
-        u_modelMatrix: () => playerCube.getModelMatrix(),
-        u_viewMatrix: () => viewMatrix,
-        u_projectionMatrix: () => projectionMatrix,
-        u_viewPosition: () => viewPos,
-
-      },
-      textures: [
-          [0, playerTextureDiffuse],
-      ],
-      cullFace: gl.BACK,
-      depthTest: gl.LEQUAL,
-  }
-);
-
+const playerDrawCall = glance.createDrawCall(gl, playerShader, playerVAO, {
+  uniforms: {
+    u_modelMatrix: () => playerCube.getModelMatrix(),
+    u_viewMatrix: () => viewMatrix,
+    u_projectionMatrix: () => projectionMatrix,
+    u_viewPosition: () => viewPos,
+  },
+  textures: [[0, playerTextureDiffuse]],
+  cullFace: gl.BACK,
+  depthTest: gl.LEQUAL,
+});
 
 // =====================================================================
 // Skybox
@@ -713,8 +697,7 @@ const shadowFramebuffer = glance.createFramebuffer(
 const shadowDrawCalls = [
   glance.createDrawCall(gl, shadowShader, mazeVAO, {
     uniforms: {
-      u_modelMatrix: () =>
-        Mat4.identity(),
+      u_modelMatrix: () => Mat4.identity(),
       u_lightXform: () => lightXform,
     },
     cullFace: gl.BACK,
@@ -740,46 +723,45 @@ setRenderLoop((time) => {
   viewPos.set(0, 0, zoom).rotateX(tilt).rotateY(pan);
   viewMatrix.lookAt(viewPos, Vec3.zero(), Vec3.yAxis());
 
+
+
   // Update the light position
   lightPos
-    .set(0, 0, -1)
-    .rotateX(lightTilt)
-    .rotateY(time * lightRotationSpeed);
+    .set(playerCube.getModelMatrix().getTranslation().x, playerCube.getModelMatrix().getTranslation().y, playerCube.getModelMatrix().getTranslation().z);
   lightXform.lookAt(lightPos, origin, up);
 
   // Render shadow map
   framebufferStack.push(gl, shadowFramebuffer);
   {
-      gl.clear(gl.DEPTH_BUFFER_BIT);
-      for (const drawCall of shadowDrawCalls) {
-          glance.performDrawCall(gl, drawCall, time);
-      }
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    for (const drawCall of shadowDrawCalls) {
+      glance.performDrawCall(gl, drawCall, time);
+    }
   }
   framebufferStack.pop(gl);
 
-    {
-      // Draw the skybox
-      gl.useProgram(skyboxShaderProgram);
+  {
+    // Draw the skybox
+    gl.useProgram(skyboxShaderProgram);
 
-      // Textures.
-      gl.activeTexture(gl.TEXTURE0 + 0);
-      gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
+    // Textures.
+    gl.activeTexture(gl.TEXTURE0 + 0);
+    gl.bindTexture(gl.TEXTURE_CUBE_MAP, skyboxTexture);
 
-      // Uniforms.
-      gl.uniformMatrix4fv(skyboxViewMatrixUniform, false, viewMatrix);
+    // Uniforms.
+    gl.uniformMatrix4fv(skyboxViewMatrixUniform, false, viewMatrix);
 
-      // Draw Call Parameters
-      gl.disable(gl.CULL_FACE);
+    // Draw Call Parameters
+    gl.disable(gl.CULL_FACE);
 
-      // VAO
-      gl.bindVertexArray(skyboxVAO);
+    // VAO
+    gl.bindVertexArray(skyboxVAO);
 
-      // Draw Call
-      gl.drawElements(gl.TRIANGLES, skyboxIndexData.length, gl.UNSIGNED_SHORT, 0);
-    }
+    // Draw Call
+    gl.drawElements(gl.TRIANGLES, skyboxIndexData.length, gl.UNSIGNED_SHORT, 0);
+  }
 
   // Render the scene
   glance.performDrawCall(gl, mazeDrawCall, time);
   glance.performDrawCall(gl, playerDrawCall, time);
-
 });
