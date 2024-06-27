@@ -305,7 +305,7 @@ const mazeShader = glance.createShader(
 );
 
 // Create the maze cube
-const numberOfSegments = 17; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const numberOfSegments = 25; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
 const mazeCube = MazeCube.create(glance.Mat4.identity(), cubeSize, numberOfSegments);
 
