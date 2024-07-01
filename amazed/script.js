@@ -424,6 +424,7 @@ const playerFragmentShaderSource = `#version 300 es
 
     uniform vec3 u_viewPosition;
     uniform sampler2D u_texDiffuse;
+    uniform float u_time;
 
     in vec3 f_worldPos;
     in vec3 f_normal;
@@ -431,12 +432,25 @@ const playerFragmentShaderSource = `#version 300 es
 
     out vec4 o_fragColor;
 
+    float pixelSize = 1./8.;
+    float glowStrength = 2.;
+    vec3 color = vec3(1.0, 1.0, 1.5);
+
     void main() {
-      float glowStrength = 1.0;
-      vec3 color = vec3(1.0, 1.0, 1.5);
+      float x = f_texCoord.x * 2. - 1.;
+      float y = f_texCoord.y * 2. - 1.;
+      vec2 coord = vec2(x - floor(x / pixelSize), y - floor(y / pixelSize));
 
       // Compute the distance from the fragment to the cube's center
-      float distance = length(f_texCoord - 0.5);
+      float distance = length(coord - 0.5) * pixelSize;
+      float smoothDistance = smoothstep(.55, 1.4, distance) + .1;
+
+      // Rings
+      float ring = sin(distance * 5.0 - u_time / 3.) / 5.0;
+      ring = abs(ring);
+      ring = smoothstep(0.0, 0.2, ring) + .2;
+
+      distance = smoothDistance * ring;
 
       // Determine the glow factor based on distance
       float glow = exp(-distance * glowStrength);
@@ -488,6 +502,7 @@ const playerDrawCall = glance.createDrawCall(gl, playerShader, playerVAO, {
     u_viewMatrix: () => viewMatrix,
     u_projectionMatrix: () => projectionMatrix,
     u_viewPosition: () => viewPos,
+    u_time: () => performance.now() / 1000,
   },
   textures: [[0, playerTextureDiffuse]],
   cullFace: gl.BACK,
