@@ -250,7 +250,7 @@ const fragmentShaderSource = `#version 300 es
 
         // colors for different parts of the maze
         vec3 pathColor = vec3(.4, .4, .4);
-        vec3 wallColor = vec3(.6, .6, .6);
+        vec3 wallColor = vec3(.7, .7, .7);
 
         vec3 faceType = f_fragPosWS * f_normal;
         vec3 finalColor = vec3(ambient + shadow * (diffuse + specular));
@@ -304,7 +304,7 @@ const mazeShader = glance.createShader(
 );
 
 // Create the maze cube
-const numberOfSegments = 25; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const numberOfSegments = 21; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
 const mazeCube = MazeCube.create(
   glance.Mat4.identity(),
@@ -314,7 +314,7 @@ const mazeCube = MazeCube.create(
 
 // tiling size
 mazeCube.geo.texCoords = mazeCube.geo.texCoords.map((c, i) =>
-  i % 2 === 0 ? c * 8 : c * 4
+  i % 2 === 0 ? c * numberOfSegments : c * numberOfSegments
 );
 // Prep mazeCube
 const mazeIBO = glance.createIndexBuffer(gl, mazeCube.geo.indices);
@@ -333,21 +333,23 @@ const mazeVAO = glance.createVAO(
 
 const geoTextureDiffuse = await glance.loadTextureNow(
   gl,
-  "https://echtzeit-computergrafik-ss24.github.io/img/rockwall-diffuse.avif",
+  "./assets/cobblestone_diffuse.jpg",
   {
     wrap: gl.REPEAT,
   }
 );
+
+
 const geoTextureSpecular = await glance.loadTextureNow(
   gl,
-  "https://echtzeit-computergrafik-ss24.github.io/img/rockwall-specular.avif",
+  "./assets/cobblestone_specular.jpg",
   {
     wrap: gl.REPEAT,
   }
 );
 const geoTextureNormal = await glance.loadTextureNow(
   gl,
-  "https://echtzeit-computergrafik-ss24.github.io/img/rockwall-normal.avif",
+  "./assets/cobblestone_normal.jpg",
   {
     wrap: gl.REPEAT,
   }
