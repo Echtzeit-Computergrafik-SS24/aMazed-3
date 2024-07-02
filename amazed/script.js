@@ -322,17 +322,17 @@ const playerFragmentShaderSource = `#version 300 es
 
     out vec4 o_fragColor;
 
-    float pixelSize = 1./8.;
+    float numberOfPixels = 8.;
     float glowStrength = 2.;
     vec3 color = vec3(1.0, 1.0, 1.5);
 
     void main() {
       float x = f_texCoord.x * 2. - 1.;
       float y = f_texCoord.y * 2. - 1.;
-      vec2 coord = vec2(x - floor(x / pixelSize), y - floor(y / pixelSize));
+      vec2 coord = vec2(x - floor(x * numberOfPixels), y - floor(y * numberOfPixels));
 
       // Compute the distance from the fragment to the cube's center
-      float distance = length(coord - 0.5) * pixelSize;
+      float distance = length(coord - 0.5) / numberOfPixels;
       float smoothDistance = smoothstep(.55, 1.4, distance) + .1;
 
       // Rings
@@ -341,14 +341,8 @@ const playerFragmentShaderSource = `#version 300 es
       ring = smoothstep(0.0, 0.2, ring) + .2;
 
       distance = smoothDistance * ring;
-
-      // Determine the glow factor based on distance
       float glow = exp(-distance * glowStrength);
-
-      // Calculate the lighting (ambient + diffuse)
       vec3 result = glow * color;
-
-      // Combine the results
       o_fragColor = vec4(result, 1.0);
     }
 `;
