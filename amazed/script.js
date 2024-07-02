@@ -1,6 +1,6 @@
+// #region Setup
 import * as glance from "../glance/js/index.js";
-import { Cube, MazeCube, Player } from "./gameObjects.js";
-import * as amazed from "./amazed.js";
+import { MazeCube, Player } from "./gameObjects.js";
 const { Vec3, Mat4 } = glance;
 
 // Get the WebGL context
@@ -58,16 +58,14 @@ function onMouseWheel(callback) {
   });
 }
 
-// Game Code Start /////////////////////////////////////////////////////////
+// #endregion Setup
 
-// =====================================================================
-// Constants
-// =====================================================================
-
+// #region Constants ===================================================
 // Globals
 const origin = Vec3.zero();
 const up = Vec3.yAxis();
 
+// Camera settings
 const fov = Math.PI / 4;
 const nearPlane = 0.1;
 const farPlane = 14;
@@ -86,14 +84,20 @@ const lightProjection = Mat4.ortho(-1, 1, -1, 1, 0.01, 3);
 const lightDirection = new Vec3(0, 0, 0).normalize();
 const lightDistance = 1.4;
 
-// =====================================================================
-// Game State
-// =====================================================================
+// #endregion Constants
 
-/// The user can orbit the camera around the world origin and zoom in and out.
+// #region Game State ==================================================
+// Camera
 let pan = 0;
 let tilt = 0;
 let zoom = 4.5;
+
+// Variables used by draw calls, updated in render loop
+const viewPos = Vec3.zero();
+const viewMatrix = Mat4.identity();
+
+const lightPos = Vec3.zero();
+const lightXform = Mat4.identity();
 
 onMouseDrag((e) => {
   pan = glance.clamp(pan - e.movementX * cameraSpeed, minPan, maxPan);
@@ -105,13 +109,14 @@ onMouseWheel((e) => {
   zoom = glance.clamp(zoom * factor, minZoom, maxZoom);
 });
 
-/// Resizing the viewport will update the projection matrix.
+/// Resizing the viewport will update the projection matrix
 const projectionMatrix = Mat4.perspective(
   fov,
   gl.canvas.width / gl.canvas.height,
   nearPlane,
   farPlane
 );
+
 onResize(() => {
   projectionMatrix.perspective(
     fov,
@@ -121,33 +126,28 @@ onResize(() => {
   );
 });
 
-// These variables are used by the draw calls.
-// They are updated in the render loop.
-const viewPos = Vec3.zero();
-const viewMatrix = Mat4.identity();
-
-const lightPos = Vec3.zero();
-const lightXform = Mat4.identity();
-
-const shadowDepthTexture = glance.createTexture(
-  gl,
-  "shadow-depth",
-  2048,
-  2048,
-  gl.TEXTURE_2D,
-  null,
-  {
-    useAnisotropy: false,
-    internalFormat: gl.DEPTH_COMPONENT16,
-    levels: 1,
-    filter: gl.NEAREST,
+// movement bindings
+document.addEventListener("keydown", (event) => {
+  switch (event.key) {
+    case "ArrowUp":
+      playerCube.moveForward();
+      break;
+    case "ArrowDown":
+      playerCube.moveBackward();
+      break;
+    case "ArrowRight":
+      playerCube.moveRight();
+      break;
+    case "ArrowLeft":
+      playerCube.moveLeft();
+      break;
   }
-);
+});
 
-// =====================================================================
-// Maze
-// =====================================================================
+// #endregion Game State
 
+// #region Shader Code =================================================
+// #region Maze Shader -------------------------------------------------
 const mazeVSSource = `#version 300 es
     precision highp float;
 
@@ -283,128 +283,9 @@ const mazeFSSource = `#version 300 es
     }
 `;
 
-const mazeShader = glance.createShader(
-  gl,
-  "maze-shader",
-  mazeVSSource,
-  mazeFSSource,
-  {
-    u_lightProjection: lightProjection,
-    u_modelMatrix: Mat4.identity(),
-    u_ambient: 0.2,
-    u_diffuse: 0.9,
-    u_specular: 0.15,
-    u_shininess: 128,
-    u_lightColor: [1.2, 1.3, 1.7],
-    u_texDiffuse: 0,
-    u_texSpecular: 1,
-    u_texNormal: 2,
-    u_texShadow: 3,
-  }
-);
+// #endregion Maze Shader ----------------------------------------------
 
-// Create the maze cube
-const numberOfSegments = 21; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
-const cubeSize = 1;
-const mazeCube = MazeCube.create(
-  glance.Mat4.identity(),
-  cubeSize,
-  numberOfSegments
-);
-
-// tiling size
-mazeCube.geo.texCoords = mazeCube.geo.texCoords.map((c, i) =>
-  i % 2 === 0 ? c * numberOfSegments : c * numberOfSegments
-);
-
-// Prep mazeCube
-const mazeIBO = glance.createIndexBuffer(gl, mazeCube.geo.indices);
-const mazeABO = glance.createAttributeBuffer(gl, "maze-abo", {
-  a_pos: { data: mazeCube.geo.positions, height: 3 },
-  a_normal: { data: mazeCube.geo.normals, height: 3 },
-  a_texCoord: { data: mazeCube.geo.texCoords, height: 2 },
-  a_tangent: { data: mazeCube.geo.tangents, height: 3 },
-});
-const mazeVAO = glance.createVAO(
-  gl,
-  "maze-vao",
-  mazeIBO,
-  glance.buildAttributeMap(mazeShader, [mazeABO])
-);
-
-const geoTextureDiffuse = await glance.loadTextureNow(
-  gl,
-  "./assets/cobblestone_diffuse.jpg",
-  {
-    useAnisotropy: false,
-    filter: [gl.NEAREST, gl.NEAREST],
-    wrap: gl.REPEAT,
-  }
-);
-
-
-const geoTextureSpecular = await glance.loadTextureNow(
-  gl,
-  "./assets/cobblestone_specular.jpg",
-  {
-    useAnisotropy: false,
-    filter: [gl.NEAREST, gl.NEAREST],
-    wrap: gl.REPEAT,
-  }
-);
-const geoTextureNormal = await glance.loadTextureNow(
-  gl,
-  "./assets/cobblestone_normal.jpg",
-  {
-    useAnisotropy: false,
-    filter: [gl.NEAREST, gl.NEAREST],
-    wrap: gl.REPEAT,
-  }
-);
-
-const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
-  uniforms: {
-    u_modelMatrix: () => mazeCube.getModelMatrix(),
-    u_viewMatrix: () => viewMatrix,
-    u_projectionMatrix: () => projectionMatrix,
-    u_viewPosition: () => viewPos,
-    u_lightPosition: () => lightPos,
-    u_lightXform: () => lightXform,
-    u_threshold1: () => mazeCube.size / 2 - mazeCube.size / numberOfSegments,
-    u_threshold2: () => mazeCube.size / 2,
-  },
-  textures: [
-    [0, geoTextureDiffuse],
-    [1, geoTextureSpecular],
-    [2, geoTextureNormal],
-    [3, shadowDepthTexture],
-  ],
-  cullFace: gl.BACK,
-  depthTest: gl.LESS,
-});
-
-// =====================================================================
-// Player
-// =====================================================================
-
-// movement bindings
-document.addEventListener("keydown", (event) => {
-  switch (event.key) {
-    case "ArrowUp":
-      playerCube.moveForward();
-      break;
-    case "ArrowDown":
-      playerCube.moveBackward();
-      break;
-    case "ArrowRight":
-      playerCube.moveRight();
-      break;
-    case "ArrowLeft":
-      playerCube.moveLeft();
-      break;
-  }
-});
-
+// #region Player Shader -----------------------------------------------
 const playerVertexShaderSource = `#version 300 es
     precision highp float;
 
@@ -472,56 +353,9 @@ const playerFragmentShaderSource = `#version 300 es
     }
 `;
 
-const playerShader = glance.createShader(
-  gl,
-  "player-shader",
-  playerVertexShaderSource,
-  playerFragmentShaderSource,
-  {
-    u_viewPosition: viewPos,
-    u_lightDirection: lightDirection,
-    u_texDiffuse: 0,
-  }
-);
-const side = 0;
-const nthSegment = 5;
-const playerCube = Player.create(mazeCube, side, nthSegment, numberOfSegments);
+// #endregion Player Shader --------------------------------------------
 
-// Prep playerCube
-const playerIBO = glance.createIndexBuffer(gl, playerCube.geo.indices);
-const playerABO = glance.createAttributeBuffer(gl, "player-abo", {
-  a_pos: { data: playerCube.geo.positions, height: 3 },
-  a_normal: { data: playerCube.geo.normals, height: 3 },
-  a_texCoord: { data: playerCube.geo.texCoords, height: 2 },
-  a_tangent: { data: playerCube.geo.tangents, height: 3 },
-});
-const playerVAO = glance.createVAO(
-  gl,
-  "player-vao",
-  playerIBO,
-  glance.buildAttributeMap(playerShader, [playerABO])
-);
-const playerTextureDiffuse = await glance.loadTextureNow(
-  gl,
-  "https://echtzeit-computergrafik-ss24.github.io/img/polybox-diffuse.png"
-);
-const playerDrawCall = glance.createDrawCall(gl, playerShader, playerVAO, {
-  uniforms: {
-    u_modelMatrix: () => playerCube.getModelMatrix(),
-    u_viewMatrix: () => viewMatrix,
-    u_projectionMatrix: () => projectionMatrix,
-    u_viewPosition: () => viewPos,
-    u_time: () => performance.now() / 1000,
-  },
-  textures: [[0, playerTextureDiffuse]],
-  cullFace: gl.BACK,
-  depthTest: gl.LEQUAL,
-});
-
-// =====================================================================
-// Skybox
-// =====================================================================
-
+// #region Skybox Shader -----------------------------------------------
 const skyboxVSSource = `#version 300 es
     precision highp float;
 
@@ -559,6 +393,156 @@ const skyboxFSSource = `#version 300 es
     }
 `;
 
+// #endregion Skybox Shader --------------------------------------------
+
+// #region Shadow Shader -----------------------------------------------
+const shadowVSSource = `#version 300 es
+    precision highp float;
+
+    uniform mat4 u_modelMatrix;
+    uniform mat4 u_lightXform;
+    uniform mat4 u_lightProjection;
+
+    in vec3 a_pos;
+
+    void main()
+    {
+        gl_Position = u_lightProjection * u_lightXform * u_modelMatrix * vec4(a_pos, 1.0);
+    }
+`;
+
+const shadowFSSource = `#version 300 es
+    precision mediump float;
+
+    void main() {}
+`;
+
+// #endregion Shadow Shader --------------------------------------------
+
+// #endregion Shader Code ===============================================
+
+// #region Geometry ====================================================
+// #region Maze Cube ---------------------------------------------------
+const mazeShader = glance.createShader(
+  gl,
+  "maze-shader",
+  mazeVSSource,
+  mazeFSSource,
+  {
+    u_lightProjection: lightProjection,
+    u_modelMatrix: Mat4.identity(),
+    u_ambient: 0.2,
+    u_diffuse: 0.9,
+    u_specular: 0.15,
+    u_shininess: 128,
+    u_lightColor: [1.2, 1.3, 1.7],
+    u_texDiffuse: 0,
+    u_texSpecular: 1,
+    u_texNormal: 2,
+    u_texShadow: 3,
+  }
+);
+
+// Create the maze cube
+const numberOfSegments = 21; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const cubeSize = 1;
+const mazeCube = MazeCube.create(
+  glance.Mat4.identity(),
+  cubeSize,
+  numberOfSegments
+);
+
+// tiling size
+mazeCube.geo.texCoords = mazeCube.geo.texCoords.map((c, i) =>
+  i % 2 === 0 ? c * numberOfSegments : c * numberOfSegments
+);
+
+// Prep mazeCube
+const mazeIBO = glance.createIndexBuffer(gl, mazeCube.geo.indices);
+const mazeABO = glance.createAttributeBuffer(gl, "maze-abo", {
+  a_pos: { data: mazeCube.geo.positions, height: 3 },
+  a_normal: { data: mazeCube.geo.normals, height: 3 },
+  a_texCoord: { data: mazeCube.geo.texCoords, height: 2 },
+  a_tangent: { data: mazeCube.geo.tangents, height: 3 },
+});
+const mazeVAO = glance.createVAO(
+  gl,
+  "maze-vao",
+  mazeIBO,
+  glance.buildAttributeMap(mazeShader, [mazeABO])
+);
+
+// Load textures
+const geoTextureDiffuse = await glance.loadTextureNow(
+  gl,
+  "./assets/cobblestone_diffuse.jpg",
+  {
+    useAnisotropy: false,
+    filter: [gl.NEAREST, gl.NEAREST],
+    wrap: gl.REPEAT,
+  }
+);
+
+const geoTextureSpecular = await glance.loadTextureNow(
+  gl,
+  "./assets/cobblestone_specular.jpg",
+  {
+    useAnisotropy: false,
+    filter: [gl.NEAREST, gl.NEAREST],
+    wrap: gl.REPEAT,
+  }
+);
+
+const geoTextureNormal = await glance.loadTextureNow(
+  gl,
+  "./assets/cobblestone_normal.jpg",
+  {
+    useAnisotropy: false,
+    filter: [gl.NEAREST, gl.NEAREST],
+    wrap: gl.REPEAT,
+  }
+);
+
+// #endregion Maze Cube -----------------------------------------------
+
+// #region Player Cube -------------------------------------------------
+const playerShader = glance.createShader(
+  gl,
+  "player-shader",
+  playerVertexShaderSource,
+  playerFragmentShaderSource,
+  {
+    u_viewPosition: viewPos,
+    u_lightDirection: lightDirection,
+    u_texDiffuse: 0,
+  }
+);
+
+// Starting segment
+const side = 0;
+const nthSegment = 5;
+
+const playerCube = Player.create(mazeCube, side, nthSegment, numberOfSegments);
+
+// Prep playerCube
+const playerIBO = glance.createIndexBuffer(gl, playerCube.geo.indices);
+const playerABO = glance.createAttributeBuffer(gl, "player-abo", {
+  a_pos: { data: playerCube.geo.positions, height: 3 },
+  a_normal: { data: playerCube.geo.normals, height: 3 },
+  a_texCoord: { data: playerCube.geo.texCoords, height: 2 },
+  a_tangent: { data: playerCube.geo.tangents, height: 3 },
+});
+
+const playerVAO = glance.createVAO(
+  gl,
+  "player-vao",
+  playerIBO,
+  glance.buildAttributeMap(playerShader, [playerABO])
+);
+
+// #endregion Player Cube ----------------------------------------------
+
+// #region Skybox ------------------------------------------------------
 const skyboxVertexShader = gl.createShader(gl.VERTEX_SHADER);
 gl.shaderSource(skyboxVertexShader, skyboxVSSource);
 gl.compileShader(skyboxVertexShader);
@@ -679,30 +663,25 @@ gl.useProgram(skyboxShaderProgram);
 gl.uniformMatrix4fv(skyboxProjectionMatrixUniform, false, projectionMatrix);
 gl.uniform1i(skyboxTextureUniform, 0);
 
-// =====================================================================
-// Shadow Mapping
-// =====================================================================
+// #endregion Skybox ----------------------------------------------------
 
-const shadowVSSource = `#version 300 es
-    precision highp float;
+// #endregion Geometry =================================================
 
-    uniform mat4 u_modelMatrix;
-    uniform mat4 u_lightXform;
-    uniform mat4 u_lightProjection;
-
-    in vec3 a_pos;
-
-    void main()
-    {
-        gl_Position = u_lightProjection * u_lightXform * u_modelMatrix * vec4(a_pos, 1.0);
-    }
-`;
-
-const shadowFSSource = `#version 300 es
-    precision mediump float;
-
-    void main() {}
-`;
+// #region Shadow Mapping ==============================================
+const shadowDepthTexture = glance.createTexture(
+  gl,
+  "shadow-depth",
+  2048,
+  2048,
+  gl.TEXTURE_2D,
+  null,
+  {
+    useAnisotropy: false,
+    internalFormat: gl.DEPTH_COMPONENT16,
+    levels: 1,
+    filter: gl.NEAREST,
+  }
+);
 
 const shadowShader = glance.createShader(
   gl,
@@ -732,10 +711,47 @@ const shadowDrawCalls = [
   }),
 ];
 
-// =====================================================================
-// Render Loop
-// =====================================================================
+// #endregion Shadow Mapping ===========================================
 
+// #region Draw calls
+// Maze draw call ------------------------------------------------------
+const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
+  uniforms: {
+    u_modelMatrix: () => mazeCube.getModelMatrix(),
+    u_viewMatrix: () => viewMatrix,
+    u_projectionMatrix: () => projectionMatrix,
+    u_viewPosition: () => viewPos,
+    u_lightPosition: () => lightPos,
+    u_lightXform: () => lightXform,
+    u_threshold1: () => mazeCube.size / 2 - mazeCube.size / numberOfSegments,
+    u_threshold2: () => mazeCube.size / 2,
+  },
+  textures: [
+    [0, geoTextureDiffuse],
+    [1, geoTextureSpecular],
+    [2, geoTextureNormal],
+    [3, shadowDepthTexture],
+  ],
+  cullFace: gl.BACK,
+  depthTest: gl.LESS,
+});
+
+// Player draw call ----------------------------------------------------
+const playerDrawCall = glance.createDrawCall(gl, playerShader, playerVAO, {
+  uniforms: {
+    u_modelMatrix: () => playerCube.getModelMatrix(),
+    u_viewMatrix: () => viewMatrix,
+    u_projectionMatrix: () => projectionMatrix,
+    u_viewPosition: () => viewPos,
+    u_time: () => performance.now() / 1000,
+  },
+  cullFace: gl.BACK,
+  depthTest: gl.LEQUAL,
+});
+
+// #endregion Draw calls
+
+// #region Render Loop =================================================
 const framebufferStack = new glance.FramebufferStack();
 
 setRenderLoop((time) => {
@@ -794,3 +810,5 @@ setRenderLoop((time) => {
   glance.performDrawCall(gl, mazeDrawCall, time);
   glance.performDrawCall(gl, playerDrawCall, time);
 });
+
+// #endregion Render Loop ===============================================
