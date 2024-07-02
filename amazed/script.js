@@ -148,7 +148,7 @@ const shadowDepthTexture = glance.createTexture(
 // Maze
 // =====================================================================
 
-const vertexShaderSource = `#version 300 es
+const mazeVSSource = `#version 300 es
     precision highp float;
 
     uniform mat4 u_modelMatrix;
@@ -194,7 +194,7 @@ const vertexShaderSource = `#version 300 es
         gl_Position = u_projectionMatrix * u_viewMatrix * worldPosition;
     }
 `;
-const fragmentShaderSource = `#version 300 es
+const mazeFSSource = `#version 300 es
     precision mediump float;
 
     uniform float u_ambient;
@@ -286,8 +286,8 @@ const fragmentShaderSource = `#version 300 es
 const mazeShader = glance.createShader(
   gl,
   "maze-shader",
-  vertexShaderSource,
-  fragmentShaderSource,
+  mazeVSSource,
+  mazeFSSource,
   {
     u_lightProjection: lightProjection,
     u_modelMatrix: Mat4.identity(),
@@ -316,6 +316,7 @@ const mazeCube = MazeCube.create(
 mazeCube.geo.texCoords = mazeCube.geo.texCoords.map((c, i) =>
   i % 2 === 0 ? c * numberOfSegments : c * numberOfSegments
 );
+
 // Prep mazeCube
 const mazeIBO = glance.createIndexBuffer(gl, mazeCube.geo.indices);
 const mazeABO = glance.createAttributeBuffer(gl, "maze-abo", {
@@ -335,6 +336,8 @@ const geoTextureDiffuse = await glance.loadTextureNow(
   gl,
   "./assets/cobblestone_diffuse.jpg",
   {
+    useAnisotropy: false,
+    filter: [gl.NEAREST, gl.NEAREST],
     wrap: gl.REPEAT,
   }
 );
@@ -344,6 +347,8 @@ const geoTextureSpecular = await glance.loadTextureNow(
   gl,
   "./assets/cobblestone_specular.jpg",
   {
+    useAnisotropy: false,
+    filter: [gl.NEAREST, gl.NEAREST],
     wrap: gl.REPEAT,
   }
 );
@@ -351,6 +356,8 @@ const geoTextureNormal = await glance.loadTextureNow(
   gl,
   "./assets/cobblestone_normal.jpg",
   {
+    useAnisotropy: false,
+    filter: [gl.NEAREST, gl.NEAREST],
     wrap: gl.REPEAT,
   }
 );
