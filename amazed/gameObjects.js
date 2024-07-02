@@ -313,7 +313,7 @@ class Player extends Cube {
     }
     animate(startingSegment, direction, rotAxis, edge = false, final) {
         const totalRotation = edge ? Math.PI : Math.PI / 2; // 90 degrees in radians
-        const baseDur = 250 // Total duration of the animation in milliseconds
+        const baseDur = 200 // Total duration of the animation in milliseconds
         const dur = edge ? baseDur * 2 : baseDur; // take longer when wrapping around an edge
         const frameRate = 120; // Frames per second
         const interval = 1000 / frameRate; // Interval in milliseconds
