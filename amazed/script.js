@@ -562,8 +562,8 @@ const skyboxVAO = glance.createVAO(
 const skyboxTexture = await glance.loadCubemapNow(gl, "skybox-texture", [
   "./assets/skybox/right.png",
   "./assets/skybox/left.png",
-  "./assets/skybox/bottom.png",
   "./assets/skybox/top.png",
+  "./assets/skybox/bottom.png",
   "./assets/skybox/front.png",
   "./assets/skybox/back.png",
 ]);
