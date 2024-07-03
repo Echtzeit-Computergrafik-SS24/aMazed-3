@@ -58,6 +58,16 @@ function onMouseWheel(callback) {
   });
 }
 
+function onKeyDown(callback)
+{
+  glCanvas.addEventListener('keydown', callback);
+}
+
+function onKeyUp(callback)
+{
+    glCanvas.addEventListener('keyup', callback);
+}
+
 // #endregion Setup ====================================================
 
 // #region Constants ===================================================
@@ -70,9 +80,9 @@ const fov = Math.PI / 4;
 const nearPlane = 0.1;
 const farPlane = 14;
 
-const cameraStartAngle = [-0.3, -0.6];
+const cameraStartAngle = [0., 0.];
 const cameraStartDistance = 3.5;
-const cameraMinDistance = 1.5;
+const cameraMinDistance = 0.6;
 const cameraMaxDistance = 10.0;
 
 // Light settings
@@ -87,8 +97,10 @@ const lightDistance = 1.4;
 let viewDist = cameraStartDistance;
 let viewPan = cameraStartAngle[0];
 let viewTilt = cameraStartAngle[1];
+let viewRoll = 0.;
 let panDelta = 0;
 let tiltDelta = 0;
+let rollDelta = 0;
 
 let viewRotationMatrix;
 let viewMatrix;
@@ -109,6 +121,56 @@ onMouseWheel((e) => {
     Math.min(cameraMaxDistance, viewDist * (1 + Math.sign(e.deltaY) * 0.2))
   );
 });
+
+onKeyDown((e) =>
+  {
+      if (e.key == "a") {
+          panDelta = Math.max(panDelta - 1, -1);
+      }
+      if (e.key == "d") {
+          panDelta = Math.min(panDelta + 1, 1);
+      }
+      if (e.key == "w") {
+          tiltDelta = Math.max(tiltDelta - 1, -1);
+      }
+      if (e.key == "s") {
+          tiltDelta = Math.min(tiltDelta + 1, 1);
+      }
+      if (e.key == "q") {
+          rollDelta = Math.min(rollDelta + 1, 1);
+      }
+      if (e.key == "e") {
+          rollDelta = Math.max(rollDelta - 1, -1);
+      }
+      if (e.key == "r") {
+          viewDist = cameraStartDistance;
+          viewPan = cameraStartAngle[0];
+          viewTilt = cameraStartAngle[1];
+          viewRoll = 0.;
+      }
+  });
+  
+  onKeyUp((e) =>
+  {
+      if (e.key == "a") {
+          panDelta = Math.min(panDelta + 1, 1);
+      }
+      if (e.key == "d") {
+          panDelta = Math.max(panDelta - 1, -1);
+      }
+      if (e.key == "w") {
+          tiltDelta = Math.min(tiltDelta + 1, 1);
+      }
+      if (e.key == "s") {
+          tiltDelta = Math.max(tiltDelta - 1, -1);
+      }
+      if (e.key == "q") {
+          rollDelta = Math.max(rollDelta - 1, -1);
+      }
+      if (e.key == "e") {
+          rollDelta = Math.min(rollDelta + 1, 1);
+      }
+  });
 
 /// Resizing the viewport will update the projection matrix
 const projectionMatrix = Mat4.perspective(
@@ -323,7 +385,7 @@ const playerFragmentShaderSource = `#version 300 es
 
     out vec4 o_fragColor;
 
-    float numberOfPixels = 8.;
+    float numberOfPixels = 8.; // Results in 16 pixels
     float glowStrength = 2.;
     vec3 color = vec3(1.0, 1.0, 1.5);
 
@@ -669,19 +731,20 @@ setRenderLoop((time) => {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   // Update the user camera
-  viewRotationMatrix = Mat4.fromRotation(new Vec3(0, 1, 0), viewPan).mul(
-    Mat4.fromRotation(new Vec3(1, 0, 0), viewTilt)
+  viewRotationMatrix = (Mat4.fromRotation(new Vec3(0, 1, 0), viewPan).mul(
+    Mat4.fromRotation(new Vec3(1, 0, 0), viewTilt)).mul(Mat4.fromRotation(new Vec3(0, 0, 1), viewRoll))
   );
   viewMatrix = viewRotationMatrix.mul(
     Mat4.fromTranslation(new Vec3(0, 0, viewDist))
   );
   viewMatrix.invert();
   
-  viewPos.set(0, 0, viewDist).rotateX(viewTilt).rotateY(viewPan);
+  viewPos.set(0, 0, viewDist).rotateX(viewTilt).rotateY(viewPan).rotateZ(viewRoll);
 
-  if (panDelta != 0 || tiltDelta != 0) {
+  if (panDelta != 0 || tiltDelta != 0 || rollDelta != 0) {
     viewPan += panDelta * 0.02;
     viewTilt += tiltDelta * 0.02;
+    viewRoll += rollDelta * 0.02;
   }
 
 
