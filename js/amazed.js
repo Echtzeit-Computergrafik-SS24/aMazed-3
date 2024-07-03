@@ -1,7 +1,6 @@
 import { generateLabyrinth } from "./generate_labyrinth.js";
 import { insetFaces } from "./inset_faces.js";
-import { GameObject, Cube, Player } from "./gameObjects.js";
-import * as glance from '../glance/js/index.js';
+import * as glance from '../glance/index.js';
 export { generateLabyrinthCube };
 
 function generateLabyrinthCube(numberOfSegments, cubeSize) {

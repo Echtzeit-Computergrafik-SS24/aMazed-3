@@ -1,5 +1,5 @@
-import { Vec3, Vec2 } from "../glance/js/math/index.js";
-import { computeTangents, removeUnusedVertices } from "../glance/js/assets/geo.js";
+import { Vec3, Vec2 } from "../glance/math/index.js";
+import { computeTangents, removeUnusedVertices } from "../glance/assets/geo.js";
 export { insetFaces };
 
 /// Inset specified faces of a cube by cubeSize/numberOfSegments

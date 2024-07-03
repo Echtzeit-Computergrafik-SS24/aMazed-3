@@ -1,5 +1,5 @@
 // #region Setup =======================================================
-import * as glance from "../glance/js/index.js";
+import * as glance from "../glance/index.js";
 import { MazeCube, Player } from "./gameObjects.js";
 const { Vec3, Mat4 } = glance;
 
