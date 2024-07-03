@@ -70,14 +70,10 @@ const fov = Math.PI / 4;
 const nearPlane = 0.1;
 const farPlane = 14;
 
-const cameraSpeed = 0.003;
-const zoomSpeed = 0.2;
-const minZoom = 0.5;
-const maxZoom = 10.0;
-const minPan = -Infinity;
-const maxPan = Infinity;
-const minTilt = Math.PI / -2;
-const maxTilt = Math.PI / 2;
+const cameraStartAngle = [-0.3, -0.6];
+const cameraStartDistance = 3.5;
+const cameraMinDistance = 1.5;
+const cameraMaxDistance = 10.0;
 
 // Light settings
 const lightProjection = Mat4.ortho(-1, 1, -1, 1, 0.01, 3);
@@ -88,25 +84,30 @@ const lightDistance = 1.4;
 
 // #region Game State ==================================================
 // Camera
-let pan = 0;
-let tilt = 0;
-let zoom = 4.5;
+let viewDist = cameraStartDistance;
+let viewPan = cameraStartAngle[0];
+let viewTilt = cameraStartAngle[1];
+let panDelta = 0;
+let tiltDelta = 0;
 
-// Variables used by draw calls, updated in render loop
+let viewRotationMatrix;
+let viewMatrix;
 const viewPos = Vec3.zero();
-const viewMatrix = Mat4.identity();
 
+// Light
 const lightPos = Vec3.zero();
 const lightXform = Mat4.identity();
 
 onMouseDrag((e) => {
-  pan = glance.clamp(pan - e.movementX * cameraSpeed, minPan, maxPan);
-  tilt = glance.clamp(tilt - e.movementY * cameraSpeed, minTilt, maxTilt);
+  viewPan += e.movementX * -0.01;
+  viewTilt += e.movementY * -0.01;
 });
 
 onMouseWheel((e) => {
-  const factor = 1 + Math.sign(e.deltaY) * zoomSpeed;
-  zoom = glance.clamp(zoom * factor, minZoom, maxZoom);
+  viewDist = Math.max(
+    cameraMinDistance,
+    Math.min(cameraMaxDistance, viewDist * (1 + Math.sign(e.deltaY) * 0.2))
+  );
 });
 
 /// Resizing the viewport will update the projection matrix
@@ -668,8 +669,21 @@ setRenderLoop((time) => {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   // Update the user camera
-  viewPos.set(0, 0, zoom).rotateX(tilt).rotateY(pan);
-  viewMatrix.lookAt(viewPos, Vec3.zero(), Vec3.yAxis());
+  viewRotationMatrix = Mat4.fromRotation(new Vec3(0, 1, 0), viewPan).mul(
+    Mat4.fromRotation(new Vec3(1, 0, 0), viewTilt)
+  );
+  viewMatrix = viewRotationMatrix.mul(
+    Mat4.fromTranslation(new Vec3(0, 0, viewDist))
+  );
+  viewMatrix.invert();
+  
+  viewPos.set(0, 0, viewDist).rotateX(viewTilt).rotateY(viewPan);
+
+  if (panDelta != 0 || tiltDelta != 0) {
+    viewPan += panDelta * 0.02;
+    viewTilt += tiltDelta * 0.02;
+  }
+
 
   // Update the light position
   const playerPos = new Vec3(
