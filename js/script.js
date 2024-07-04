@@ -392,7 +392,7 @@ const playerFragmentShaderSource = `#version 300 es
     void main() {
       float x = f_texCoord.x * 2. - 1.;
       float y = f_texCoord.y * 2. - 1.;
-      vec2 coord = vec2(x - floor(x * numberOfPixels), y - floor(y * numberOfPixels));
+      vec2 coord = vec2(x + ceil(x * numberOfPixels), y + ceil(y * numberOfPixels));
 
       // Compute the distance from the fragment to the cube's center
       float distance = length(coord - 0.5) / numberOfPixels;
@@ -772,8 +772,8 @@ setRenderLoop((time) => {
   framebufferStack.pop(gl);
 
   // Render the scene
-  glance.performDrawCall(gl, skyboxDrawCall, time);
-  glance.performDrawCall(gl, mazeDrawCall, time);
+  // glance.performDrawCall(gl, skyboxDrawCall, time);
+  // glance.performDrawCall(gl, mazeDrawCall, time);
   glance.performDrawCall(gl, playerDrawCall, time);
 });
 
