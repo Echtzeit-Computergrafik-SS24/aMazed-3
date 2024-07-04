@@ -225,6 +225,7 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
         positions[topFaceVertices[2] * 3 + 2]
       )
     );
+
     // Create walls
     for (let i = 0; i < 3; i++) {
       // Check if the triangle is on the edge of the inset vertices by checking if there already is a triangle between the vertices
@@ -283,12 +284,6 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
         // Push to positions
         const posLength = positions.length / 3;
         positions.push(
-          currentTopFacePositions.x,
-          currentTopFacePositions.y,
-          currentTopFacePositions.z,
-          nextTopFacePositions.x,
-          nextTopFacePositions.y,
-          nextTopFacePositions.z,
           currentBottomFacePositions.x,
           currentBottomFacePositions.y,
           currentBottomFacePositions.z,
@@ -299,12 +294,6 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
 
         // Push to normals
         normals.push(
-          wallNormal.x,
-          wallNormal.y,
-          wallNormal.z,
-          wallNormal.x,
-          wallNormal.y,
-          wallNormal.z,
           wallNormal.x,
           wallNormal.y,
           wallNormal.z,
@@ -327,10 +316,6 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
         // Push uv coordinates to texCoords with offset depending on face normal
         if (wallNormal.x !== 0 && wallNormal.y === 0 && wallNormal.z === 0) {
           texCoords.push(
-            currentTopFaceTexCoords[0],
-            currentTopFaceTexCoords[1],
-            nextTopFaceTexCoords[0],
-            nextTopFaceTexCoords[1],
             currentTopFaceTexCoords[0] + 1 / numberOfSegments * wallNormal.x,
             currentTopFaceTexCoords[1],
             nextTopFaceTexCoords[0] + 1 / numberOfSegments * wallNormal.x,
@@ -343,10 +328,6 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
         ) {
           texCoords.push(
             currentTopFaceTexCoords[0],
-            currentTopFaceTexCoords[1],
-            nextTopFaceTexCoords[0],
-            nextTopFaceTexCoords[1],
-            currentTopFaceTexCoords[0],
             currentTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.y,
             nextTopFaceTexCoords[0],
             nextTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.y
@@ -358,10 +339,6 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
         ) {
           texCoords.push(
             currentTopFaceTexCoords[0],
-            currentTopFaceTexCoords[1],
-            nextTopFaceTexCoords[0],
-            nextTopFaceTexCoords[1],
-            currentTopFaceTexCoords[0],
             currentTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.z,
             nextTopFaceTexCoords[0],
             nextTopFaceTexCoords[1] + 1 / numberOfSegments * wallNormal.z
@@ -369,8 +346,8 @@ function insetFaces(cube, numberOfSegments, cubeSize, facesToInset) {
         } 
 
         // Push new indices
-        indices.push(posLength, posLength + 1, posLength + 2);
-        indices.push(posLength + 1, posLength + 3, posLength + 2);
+        indices.push(topFaceVertices[i], topFaceVertices[(i + 1) % 3], posLength);
+        indices.push(topFaceVertices[(i + 1) % 3], posLength + 1, posLength);
       }
     }
 
