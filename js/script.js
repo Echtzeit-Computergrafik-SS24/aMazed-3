@@ -772,8 +772,8 @@ setRenderLoop((time) => {
   framebufferStack.pop(gl);
 
   // Render the scene
-  // glance.performDrawCall(gl, skyboxDrawCall, time);
-  // glance.performDrawCall(gl, mazeDrawCall, time);
+  glance.performDrawCall(gl, skyboxDrawCall, time);
+  glance.performDrawCall(gl, mazeDrawCall, time);
   glance.performDrawCall(gl, playerDrawCall, time);
 });
 
