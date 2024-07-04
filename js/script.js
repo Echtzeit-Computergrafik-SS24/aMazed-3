@@ -753,24 +753,27 @@ const overlayFSSource = `#version 300 es
   out vec4 o_fragColor;
 
   void main() {
-      vec3 color = texture(u_texture, f_texCoord).rgb;
-      o_fragColor = vec4(color, 1.0);
+      // vec3 color = texture(u_texture, f_texCoord).rgb;
+      // float factor = texture(u_textLayer, f_texCoord).r;
+      // color = mix(vec3(1.0) - color, color, factor);
+      // o_fragColor = vec4(color, 1.0);
+      o_fragColor = texture(u_texture, f_texCoord);
   }
 `;
 
 
 // create canvas to write in 
 const textCanvas = document.createElement('canvas');
-textCanvas.width = 256;
-textCanvas.height = 256;
+textCanvas.width = glCanvas.width;
+textCanvas.height = glCanvas.height;
 const textCtx = textCanvas.getContext('2d');
 
 // Draw text
 textCtx.fillStyle = 'rgba(255, 255, 255, 0)';
 textCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
 textCtx.fillStyle = 'blue';
-textCtx.font = '48px sans-serif';
-textCtx.fillText('hello', 50, 100);
+textCtx.font = '30px sans-serif';
+textCtx.fillText('hello', Math.floor(textCanvas.width/2), Math.floor(textCanvas.height/2));
 
 
 const overlayShader = glance.createShader(gl, "overlay-shader", overlayVSSource, overlayFSSource, {
@@ -798,7 +801,7 @@ const overlayTexture = glance.createTexture(
   {
     useAnisotropy: false,
     internalFormat: gl.RGBA8,
-    levels: 1,  // in case not working, change to 1
+    levels: 1,
     filter: gl.LINEAR,
     wrap: gl.CLAMP_TO_EDGE,
   },
@@ -806,22 +809,48 @@ const overlayTexture = glance.createTexture(
 
 // doing this in an update, because I don't think source is set-able in createTexture()
 glance.updateTexture(
-gl,
-overlayTexture,
-textCanvas,
-{flipY: true}
+  gl,
+  overlayTexture,
+  textCanvas,
+  {flipY: true}
 )
 
 const overlayDrawCall = glance.createDrawCall(gl, overlayShader, overlayVAO, {
-uniforms: {},
-textures: [
-[0, overlayTexture],
-],
-cullFace: gl.NONE,
-depthTest: gl.NONE,
-});
+  uniforms: {},
+  textures: [
+    [0, overlayTexture],
+  ],
+  cullFace: gl.NONE,
+  depthTest: gl.NONE,
+  }
+);
 
+// Frame buffer
+const overlayDepth = gl.createRenderbuffer();
+gl.bindRenderbuffer(gl.RENDERBUFFER, overlayDepth);
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, textCanvas.width, textCanvas.height);
+gl.bindRenderbuffer(gl.RENDERBUFFER, null);
 
+const overlayFramebuffer = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, overlayFramebuffer);
+gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D,
+    overlayTexture.glObject,
+/* level= */ 0,
+);
+
+gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, overlayDepth);
+let fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+if (fbStatus !== gl.FRAMEBUFFER_COMPLETE)
+  {
+      throw new Error("Framebuffer incomplete");
+  }
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+// #endregion Time overlay ================================================
 
 // #region Render Loop =================================================
 const framebufferStack = new glance.FramebufferStack();
@@ -871,9 +900,20 @@ setRenderLoop((time) => {
   framebufferStack.pop(gl);
 
   // Render the scene
-  glance.performDrawCall(gl, skyboxDrawCall, time);
-  glance.performDrawCall(gl, mazeDrawCall, time);
-  glance.performDrawCall(gl, playerDrawCall, time);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, overlayFramebuffer);
+  gl.viewport(0, 0, textCanvas.width, textCanvas.height);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // glance.performDrawCall(gl, skyboxDrawCall, time);
+  // glance.performDrawCall(gl, mazeDrawCall, time);
+  // glance.performDrawCall(gl, playerDrawCall, time);
+  
+  // Render the final view
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+  // gl.clear(gl.COLOR_BUFFER_BIT);
+  
+  glance.performDrawCall(gl, overlayDrawCall, time);
 });
 
 // #endregion Render Loop ===============================================
