@@ -2,7 +2,7 @@
 // Logging
 // =============================================================================
 /// The verbose code contains more and detailled log messages.
-const VERBOSE = false;
+const VERBOSE = true;
 console.log(`Using glance in ${VERBOSE ? "verbose" : "silent"} mode.`);
 /// Logs a message to the console if VERBOSE is true.
 /// @param message Message to log if VERBOSE is true.

@@ -724,6 +724,105 @@ const skyboxDrawCall = glance.createDrawCall(gl, skyboxShader, skyboxVAO, {
 
 // #endregion Draw calls ===============================================
 
+// #region Time overlay ================================================
+
+// Vertex shader program
+const overlayVSSource = `#version 300 es
+  precision highp float;
+
+  in vec2 a_pos;
+  in vec2 a_texCoord;
+
+  out vec2 f_texCoord;
+
+  void main()
+  {
+      f_texCoord = a_texCoord;
+      gl_Position = vec4(a_pos, 0.0, 1.0);
+  }
+`;
+
+// Fragment shader program
+const overlayFSSource = `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_texture;
+
+  in vec2 f_texCoord;
+
+  out vec4 o_fragColor;
+
+  void main() {
+      vec3 color = texture(u_texture, f_texCoord).rgb;
+      o_fragColor = vec4(color, 1.0);
+  }
+`;
+
+
+// create canvas to write in 
+const textCanvas = document.createElement('canvas');
+textCanvas.width = 256;
+textCanvas.height = 256;
+const textCtx = textCanvas.getContext('2d');
+
+// Draw text
+textCtx.fillStyle = 'rgba(255, 255, 255, 0)';
+textCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+textCtx.fillStyle = 'blue';
+textCtx.font = '48px sans-serif';
+textCtx.fillText('hello', 50, 100);
+
+
+const overlayShader = glance.createShader(gl, "overlay-shader", overlayVSSource, overlayFSSource, {
+  u_texture: 0,
+});
+
+const overlayGeo = glance.createScreenQuat("overlay-geo", {
+  in2D: true,
+});
+
+const overlayIBO = glance.createIndexBuffer(gl, overlayGeo.indices);
+const overlayABO = glance.createAttributeBuffer(gl, "overlay-abo", {
+  a_pos: { data: overlayGeo.positions, height: 2 },
+  a_texCoord: { data: overlayGeo.texCoords, height: 2 },
+});
+const overlayVAO = glance.createVAO(gl, "overlay-vao", overlayIBO, glance.buildAttributeMap(overlayShader, [overlayABO]));
+
+const overlayTexture = glance.createTexture(
+  gl,
+  "color-target",
+  textCanvas.width,
+  textCanvas.height,
+  gl.TEXTURE_2D,
+  null,
+  {
+    useAnisotropy: false,
+    internalFormat: gl.RGBA8,
+    levels: 1,  // in case not working, change to 1
+    filter: gl.LINEAR,
+    wrap: gl.CLAMP_TO_EDGE,
+  },
+);
+
+// doing this in an update, because I don't think source is set-able in createTexture()
+glance.updateTexture(
+gl,
+overlayTexture,
+textCanvas,
+{flipY: true}
+)
+
+const overlayDrawCall = glance.createDrawCall(gl, overlayShader, overlayVAO, {
+uniforms: {},
+textures: [
+[0, overlayTexture],
+],
+cullFace: gl.NONE,
+depthTest: gl.NONE,
+});
+
+
+
 // #region Render Loop =================================================
 const framebufferStack = new glance.FramebufferStack();
 
