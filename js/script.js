@@ -90,6 +90,26 @@ const lightProjection = Mat4.ortho(-1, 1, -1, 1, 0.01, 3);
 const lightDirection = new Vec3(0, 0, 0).normalize();
 const lightDistance = 1.4;
 
+// Canvas for the time display
+const timeDisplay = document.createElement('canvas');
+timeDisplay.width = glCanvas.width;
+timeDisplay.height = glCanvas.height;
+const timeDisplayCtx = timeDisplay.getContext('2d');
+function msToTime(s) {
+  function pad(n, z) {
+    z = z || 2;
+    return ('00' + n).slice(-z);
+  }
+
+  var ms = s % 1000;
+  s = (s - ms) / 1000;
+  var secs = s % 60;
+  s = (s - secs) / 60;
+  var mins = s % 60;
+
+  return pad(mins) + ':' + pad(secs);
+}
+
 // #endregion Constants ================================================
 
 // #region Game State ==================================================
@@ -470,6 +490,44 @@ const shadowFSSource = `#version 300 es
 
 // #endregion Shadow Shader --------------------------------------------
 
+// #region Time Display Shader -----------------------------------------
+
+// Vertex shader program
+const overlayVSSource = `#version 300 es
+  precision highp float;
+
+  in vec2 a_pos;
+  in vec2 a_texCoord;
+
+  out vec2 f_texCoord;
+
+  void main()
+  {
+      f_texCoord = a_texCoord;
+      gl_Position = vec4(a_pos, 0.0, 1.0);
+  }
+`;
+
+// Fragment shader program
+const overlayFSSource = `#version 300 es
+  precision mediump float;
+
+  uniform sampler2D u_texture;
+  uniform sampler2D u_textLayer;
+
+  in vec2 f_texCoord;
+
+  out vec4 o_fragColor;
+
+  void main() {
+      vec4 baseColor = texture(u_texture, f_texCoord);
+      vec4 overlayColor = texture(u_textLayer, f_texCoord);
+      vec4 blendedColor = mix(baseColor, overlayColor, overlayColor.a);
+      o_fragColor = blendedColor;
+  }
+`;
+
+// #endregion Time Display Shader --------------------------------------
 // #endregion Shader Code ===============================================
 
 // #region Geometry ====================================================
@@ -627,6 +685,68 @@ const skyboxTexture = await glance.loadCubemapNow(gl, "skybox-texture", [
 
 // #endregion Skybox ----------------------------------------------------
 
+// #region Time Display -----------------------------------------------
+
+
+
+
+const overlayShader = glance.createShader(gl, "overlay-shader", overlayVSSource, overlayFSSource, {
+  u_texture: 0,
+  u_textLayer: 1,
+});
+
+const overlayGeo = glance.createScreenQuat("overlay-geo", {
+  in2D: true
+});
+
+const overlayIBO = glance.createIndexBuffer(gl, overlayGeo.indices);
+const overlayABO = glance.createAttributeBuffer(gl, "overlay-abo", {
+  a_pos: { data: overlayGeo.positions, height: 2 },
+  a_texCoord: { data: overlayGeo.texCoords, height: 2 },
+});
+const overlayVAO = glance.createVAO(gl, "overlay-vao", overlayIBO, glance.buildAttributeMap(overlayShader, [overlayABO]));
+
+const overlayTexture = glance.createTexture(
+  gl,
+  "color-target",
+  timeDisplay.width,
+  timeDisplay.height,
+  gl.TEXTURE_2D,
+  null,
+  {
+    useAnisotropy: false,
+    internalFormat: gl.RGBA8,
+    levels: 1,
+    filter: gl.LINEAR,
+    wrap: gl.CLAMP_TO_EDGE,
+  },
+);
+
+// doing this in an update, because I don't think source is set-able in createTexture()
+glance.updateTexture(
+  gl,
+  overlayTexture,
+  timeDisplay,
+  {flipY: true}
+)
+
+
+const postTexture = glance.createTexture(
+  gl,
+  "color-target",
+  timeDisplay.width,
+  timeDisplay.height,
+  gl.TEXTURE_2D,
+  null,
+  {
+      useAnisotropy: false,
+      internalFormat: gl.RGBA8,
+      levels: 1,
+  },
+);
+
+// #endregion Time Display --------------------------------------------
+
 // #endregion Geometry =================================================
 
 // #region Shadow Mapping ==============================================
@@ -676,7 +796,7 @@ const shadowDrawCalls = [
 // #endregion Shadow Mapping ===========================================
 
 // #region Draw calls ==================================================
-// Maze draw call ------------------------------------------------------
+// #region Maze draw call ------------------------------------------------------
 const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   uniforms: {
     u_modelMatrix: () => mazeCube.getModelMatrix(),
@@ -697,8 +817,8 @@ const mazeDrawCall = glance.createDrawCall(gl, mazeShader, mazeVAO, {
   cullFace: gl.BACK,
   depthTest: gl.LESS,
 });
-
-// Player draw call ----------------------------------------------------
+// #endregion Maze draw call ---------------------------------------------------
+// #region Player draw call ----------------------------------------------------
 const playerDrawCall = glance.createDrawCall(gl, playerShader, playerVAO, {
   uniforms: {
     u_modelMatrix: () => playerCube.getModelMatrix(),
@@ -710,8 +830,8 @@ const playerDrawCall = glance.createDrawCall(gl, playerShader, playerVAO, {
   cullFace: gl.BACK,
   depthTest: gl.LEQUAL,
 });
-
-// Skybox draw call ----------------------------------------------------
+// #endregion Player draw call -------------------------------------------------
+// #region Skybox draw call ----------------------------------------------------
 const skyboxDrawCall = glance.createDrawCall(gl, skyboxShader, skyboxVAO, {
   uniforms: {
     u_viewMatrix: () => viewMatrix,
@@ -721,114 +841,28 @@ const skyboxDrawCall = glance.createDrawCall(gl, skyboxShader, skyboxVAO, {
   cullFace: gl.NONE,
   depthTest: gl.LEQUAL,
 });
-
-// #endregion Draw calls ===============================================
-
-// #region Time overlay ================================================
-
-// Vertex shader program
-const overlayVSSource = `#version 300 es
-  precision highp float;
-
-  in vec2 a_pos;
-  in vec2 a_texCoord;
-
-  out vec2 f_texCoord;
-
-  void main()
-  {
-      f_texCoord = a_texCoord;
-      gl_Position = vec4(a_pos, 0.0, 1.0);
-  }
-`;
-
-// Fragment shader program
-const overlayFSSource = `#version 300 es
-  precision mediump float;
-
-  uniform sampler2D u_texture;
-
-  in vec2 f_texCoord;
-
-  out vec4 o_fragColor;
-
-  void main() {
-      // vec3 color = texture(u_texture, f_texCoord).rgb;
-      // float factor = texture(u_textLayer, f_texCoord).r;
-      // color = mix(vec3(1.0) - color, color, factor);
-      // o_fragColor = vec4(color, 1.0);
-      o_fragColor = texture(u_texture, f_texCoord);
-  }
-`;
-
-
-// create canvas to write in 
-const textCanvas = document.createElement('canvas');
-textCanvas.width = glCanvas.width;
-textCanvas.height = glCanvas.height;
-const textCtx = textCanvas.getContext('2d');
-
-// Draw text
-textCtx.fillStyle = 'rgba(255, 255, 255, 0)';
-textCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
-textCtx.fillStyle = 'blue';
-textCtx.font = '30px sans-serif';
-textCtx.fillText('hello', Math.floor(textCanvas.width/2), Math.floor(textCanvas.height/2));
-
-
-const overlayShader = glance.createShader(gl, "overlay-shader", overlayVSSource, overlayFSSource, {
-  u_texture: 0,
-});
-
-const overlayGeo = glance.createScreenQuat("overlay-geo", {
-  in2D: true,
-});
-
-const overlayIBO = glance.createIndexBuffer(gl, overlayGeo.indices);
-const overlayABO = glance.createAttributeBuffer(gl, "overlay-abo", {
-  a_pos: { data: overlayGeo.positions, height: 2 },
-  a_texCoord: { data: overlayGeo.texCoords, height: 2 },
-});
-const overlayVAO = glance.createVAO(gl, "overlay-vao", overlayIBO, glance.buildAttributeMap(overlayShader, [overlayABO]));
-
-const overlayTexture = glance.createTexture(
-  gl,
-  "color-target",
-  textCanvas.width,
-  textCanvas.height,
-  gl.TEXTURE_2D,
-  null,
-  {
-    useAnisotropy: false,
-    internalFormat: gl.RGBA8,
-    levels: 1,
-    filter: gl.LINEAR,
-    wrap: gl.CLAMP_TO_EDGE,
-  },
-);
-
-// doing this in an update, because I don't think source is set-able in createTexture()
-glance.updateTexture(
-  gl,
-  overlayTexture,
-  textCanvas,
-  {flipY: true}
-)
-
+// #endregion Skybox draw call ----------------------------------------------------
+// #region Time Display draw call ----------------------------------------------------
 const overlayDrawCall = glance.createDrawCall(gl, overlayShader, overlayVAO, {
-  uniforms: {},
+  uniforms: {
+
+  },
   textures: [
-    [0, overlayTexture],
+    [0, postTexture],    
+    [1, overlayTexture]
+
   ],
   cullFace: gl.NONE,
   depthTest: gl.NONE,
   }
 );
+// #endregion Time Display draw call ----------------------------------------------------
+// #endregion Draw calls ===============================================
 
-// Frame buffer
+// #region Time Display Frame Buffer ================================================
 const overlayDepth = gl.createRenderbuffer();
 gl.bindRenderbuffer(gl.RENDERBUFFER, overlayDepth);
-gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, textCanvas.width, textCanvas.height);
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, timeDisplay.width, timeDisplay.height);
 gl.bindRenderbuffer(gl.RENDERBUFFER, null);
 
 const overlayFramebuffer = gl.createFramebuffer();
@@ -837,10 +871,9 @@ gl.framebufferTexture2D(
     gl.FRAMEBUFFER,
     gl.COLOR_ATTACHMENT0,
     gl.TEXTURE_2D,
-    overlayTexture.glObject,
+    postTexture.glObject,
 /* level= */ 0,
 );
-
 gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
 gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, overlayDepth);
 let fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
@@ -849,12 +882,12 @@ if (fbStatus !== gl.FRAMEBUFFER_COMPLETE)
       throw new Error("Framebuffer incomplete");
   }
 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+// #endregion Time Display Frame Buffer ================================================
 
-// #endregion Time overlay ================================================
+
 
 // #region Render Loop =================================================
 const framebufferStack = new glance.FramebufferStack();
-
 setRenderLoop((time) => {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -875,6 +908,19 @@ setRenderLoop((time) => {
     viewRoll += rollDelta * 0.02;
   }
 
+  // Update the time display
+  timeDisplayCtx.clearRect(0, 0, timeDisplay.width, timeDisplay.height);
+  timeDisplayCtx.fillStyle = 'rgba(0, 0, 0, 0)';
+  timeDisplayCtx.fillRect(0, 0, timeDisplay.width, timeDisplay.height);
+  timeDisplayCtx.fillStyle = 'white';
+  timeDisplayCtx.font = '60px sans-serif';
+  timeDisplayCtx.fillText(msToTime(time), Math.floor(timeDisplay.width/10), Math.floor(timeDisplay.height/10));
+  glance.updateTexture(
+    gl,
+    overlayTexture,
+    timeDisplay,
+    {flipY: true}
+  )
 
   // Update the light position
   const playerPos = new Vec3(
@@ -901,19 +947,20 @@ setRenderLoop((time) => {
 
   // Render the scene
   gl.bindFramebuffer(gl.FRAMEBUFFER, overlayFramebuffer);
-  gl.viewport(0, 0, textCanvas.width, textCanvas.height);
+  gl.viewport(0, 0, timeDisplay.width, timeDisplay.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  // glance.performDrawCall(gl, skyboxDrawCall, time);
-  // glance.performDrawCall(gl, mazeDrawCall, time);
-  // glance.performDrawCall(gl, playerDrawCall, time);
+  glance.performDrawCall(gl, skyboxDrawCall, time);
+  glance.performDrawCall(gl, mazeDrawCall, time);
+  glance.performDrawCall(gl, playerDrawCall, time);
   
   // Render the final view
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-  // gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.clear(gl.COLOR_BUFFER_BIT);
   
   glance.performDrawCall(gl, overlayDrawCall, time);
 });
 
 // #endregion Render Loop ===============================================
+
