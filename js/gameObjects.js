@@ -83,7 +83,6 @@ class GameObject {
     }
 }
 
-
 class Cube extends GameObject {
     constructor(geo, modelMatrix, size, numSegments) {
         super(geo, modelMatrix);
@@ -150,7 +149,6 @@ class MazeCube extends Cube {
     constructor(geo, modelMatrix, size, numSegments, labyrinth) {
         super(geo, modelMatrix, size, numSegments);
         this.labyrinth = labyrinth;
-
     }
     static create(modelMatrix, size, numberOfSegments) {
         let cube = Cube.create(modelMatrix, size, numberOfSegments);
@@ -164,7 +162,7 @@ class MazeCube extends Cube {
 }
 
 class Player extends Cube {
-    constructor(geo, modelMatrix, size, numSegments, mazeCube) {
+    constructor(geo, modelMatrix, size, numSegments, mazeCube, gameWonCallback) {
         super(geo, modelMatrix, size, numSegments);
         this.setParent(mazeCube);
         this.side = null;
@@ -173,10 +171,10 @@ class Player extends Cube {
         this.localCoordSys = null;
         this.movementDirections = null;
         this.moving = false;
+        this.gameWonCallback = gameWonCallback;
     }
-    static create(mazeCube, side, nthSegment, numSegments) {
+    static create(mazeCube, numSegments, gameWonCallback) {
         let size = mazeCube.size / mazeCube.numSegments;
-        // let size = mazeCube.size/mazeCube.numSegments * 1.5;
         let geo = glance.createBox('player-geo', {
             width: size,
             height: size,
@@ -185,19 +183,17 @@ class Player extends Cube {
             heightSegments: numSegments,
             depthSegments: numSegments
         });
-        let player = new Player(geo, glance.Mat4.identity(), size, numSegments, mazeCube);
-        player.side = side;
-        player.nthSegment = nthSegment;
+        let player = new Player(geo, glance.Mat4.identity(), size, numSegments, mazeCube, gameWonCallback);
 
-        player.initSegment(side, nthSegment);
+        player.initSegment();
         player.initModelMatrix();
         player.initLocalCoordSys();
         player.getSegmentByPos(player.getModelMatrix().getTranslation());  // for debugging
         return player;
     }
-    initSegment(side, nthSegment) {
+    initSegment() {
         let nth = convertSegmentToSideNth(Math.floor(this.numSegments/2), Math.floor(this.numSegments/2), this.parent.numSegments)
-        side = 5
+        let side = 5 // labyrinth hardcoded to start here
         this.currSegment = this.parent.getSegment(side, nth);
         this.side = side;
         this.nthSegment = nth;
@@ -209,6 +205,7 @@ class Player extends Cube {
         this.updateModelMatrix(glance.Mat4.fromTranslation(pos));
     }
     initLocalCoordSys() {
+        // should have just used a Mat3, but too lazy to change it now
         let currentOutVec = this.currSegment.normal.clone();
         this.localCoordSys =
         {
@@ -298,6 +295,11 @@ class Player extends Cube {
         this.side = segment[2];
         this.nthSegment = segment[3];
         this.currSegment = segment[0];
+        let xy = convertSegmentToXY(this.nthSegment, this.parent.numSegments);
+        if (this.side === 4 && xy[0] === Math.ceil(this.parent.numSegments / 2)-1 && xy[1] === Math.ceil(this.parent.numSegments / 2)-1) {
+            this.gameWonCallback();
+        }
+
     }
     moveForward() {
         this.move(this.localCoordSys["y"].clone(), this.localCoordSys["x"].clone().scale(-1))
@@ -368,6 +370,5 @@ class Player extends Cube {
     }
 
 }
-
 
 

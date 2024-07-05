@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: rgb(20, 20, 20);
+        }
+
+        #container {
+            display: grid;
+            place-items: center;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        canvas {
+            width: 512px;
+            height: 512px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <canvas id="canvas" width=512 height=512 tabindex="0"></canvas>
+    </div>
+</body>
+
+<script>
+    // Boilerplate code ////////////////////////////////////////////////////////
+
+    // Get the WebGL context
+    const canvas = document.getElementById('canvas');
+    const gl = canvas.getContext('webgl2', {
+        alpha: true,
+        premultipliedAlpha: false,
+    });
+
+    // Basic render loop wrapper.
+    function setRenderLoop(callback) {
+        function renderLoop(time) {
+            callback(time);
+            requestAnimationFrame(renderLoop);
+        }
+        requestAnimationFrame(renderLoop);
+    }
+
+    // Resize callback
+    let _resizeCallback = null;
+    canvas.addEventListener("resize", () => {
+        if (_resizeCallback)
+        {
+            _resizeCallback(canvas.clientWidth, canvas.clientHeight);
+        }
+    });
+    function onResize(callback) {
+        _resizeCallback = callback;
+        _resizeCallback(canvas.clientWidth, canvas.clientHeight);
+    }
+
+</script>
+
+<script type="module">
+    import * as glance from "./glance/index.js";
+
+    // #region frame buffer a
+    const vertexShaderSource = `#version 300 es
+            precision highp float;
+
+            uniform mat4 u_modelMatrix;
+            uniform mat4 u_viewMatrix;
+            uniform mat4 u_projectionMatrix;
+
+            in vec3 a_pos;
+            in vec3 a_normal;
+
+            out vec3 f_worldPos;
+            out vec3 f_normal;
+
+            void main() {
+                vec4 worldPos = u_modelMatrix * vec4(a_pos, 1.0);
+                f_worldPos = worldPos.xyz;
+                f_normal = (u_modelMatrix * vec4(a_normal, 0.0)).xyz;
+                gl_Position = u_projectionMatrix * u_viewMatrix * worldPos;
+            }
+        `;
+
+    const fragmentShaderSource = `#version 300 es
+                precision mediump float;
+
+                uniform vec3 u_color;
+                uniform vec3 u_viewPosition;
+                uniform vec3 u_lightDirection;
+
+                in vec3 f_worldPos;
+                in vec3 f_normal;
+
+                out vec4 o_fragColor;
+
+                void main() {
+                    vec3 normal = normalize(f_normal);
+                    vec3 viewDirection = normalize(f_worldPos - u_viewPosition);
+                    vec3 halfWay = normalize(viewDirection + u_lightDirection);
+
+                    vec3 ambient = vec3(0.0);
+                    vec3 diffuse = max(0.0, dot(normal, u_lightDirection)) * u_color * 3.141592653589793 / 3.0;
+                    vec3 specular = pow(max(0.0, dot(normal, halfWay)), 32.0) * vec3(0.067);
+
+                    o_fragColor = vec4(vec3(ambient + diffuse + specular), 1.0);
+                }
+            `;
+
+    const boxShader = glance.createShader(gl, "my-shader", vertexShaderSource, fragmentShaderSource, {
+        u_viewMatrix: glance.Mat4.fromTranslation(0, 0, -2),
+        u_projectionMatrix: glance.Mat4.perspective((75 / 180) * Math.PI, 2, 0.1, 5),
+        u_viewPosition: new glance.Vec3(0, 0, 2),
+        u_lightDirection: new glance.Vec3(-1, 2, 4).normalize(),
+    });
+
+    const box = glance.createBox("my-box");
+    const boxIBO = glance.createIndexBuffer(gl, box.indices);
+    const boxABO = glance.createAttributeBuffer(gl, "box-abo", {
+        a_pos: { data: box.positions, height: 3 },
+        a_normal: { data: box.normals, height: 3 },
+    });
+    const boxVAO = glance.createVAO(gl, "box-vao", boxIBO, glance.buildAttributeMap(boxShader, [boxABO]));
+
+    const greenBoxDrawCall = glance.createDrawCall(gl, boxShader, boxVAO, {
+        uniforms: {
+            u_modelMatrix: () => glance.Mat4.identity(),
+            u_color: () => [0.267, 0.667, 0.533],
+        },
+        cullFace: gl.BACK,
+        depthTest: gl.LESS,
+    });
+
+    gl.clearColor(0, 0, 0, 1);
+
+    // Vertex shader program
+    const overlayVSSource = `#version 300 es
+        precision highp float;
+
+        in vec2 a_pos;
+        in vec2 a_texCoord;
+
+        out vec2 f_texCoord;
+
+        void main()
+        {
+            f_texCoord = a_texCoord;
+            gl_Position = vec4(a_pos, 0.0, 1.0);
+        }
+    `;
+
+    // Fragment shader program
+    const overlayFSSource = `#version 300 es
+        precision mediump float;
+
+        uniform sampler2D u_texture;
+
+        in vec2 f_texCoord;
+
+        out vec4 o_fragColor;
+
+        void main() {
+            vec3 color = texture(u_texture, f_texCoord).rgb;
+            o_fragColor = vec4(color, 1.0);
+        }
+    `;
+
+    
+    // create canvas to write in 
+    const textCanvas = document.createElement('canvas');
+    textCanvas.width = canvas.width;
+    textCanvas.height = canvas.height;
+    const textCtx = textCanvas.getContext('2d');
+
+    // Draw text
+    textCtx.fillStyle = 'rgba(255, 255, 255, 0)';
+    textCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+    textCtx.fillStyle = 'blue';
+    textCtx.font = '30px sans-serif';
+    textCtx.fillText('hello', 30, 10);
+    
+
+    const overlayShader = glance.createShader(gl, "overlay-shader", overlayVSSource, overlayFSSource, {
+        u_texture: 0,
+    });
+
+    const overlayGeo = glance.createScreenQuat("overlay-geo", {
+        in2D: true,
+    });
+
+    const overlayIBO = glance.createIndexBuffer(gl, overlayGeo.indices);
+    const overlayABO = glance.createAttributeBuffer(gl, "overlay-abo", {
+        a_pos: { data: overlayGeo.positions, height: 2 },
+        a_texCoord: { data: overlayGeo.texCoords, height: 2 },
+    });
+    const overlayVAO = glance.createVAO(gl, "overlay-vao", overlayIBO, glance.buildAttributeMap(overlayShader, [overlayABO]));
+
+    const overlayTexture = glance.createTexture(
+    gl,
+    "color-target",
+    textCanvas.width,
+    textCanvas.height,
+    gl.TEXTURE_2D,
+    null,
+    {
+        useAnisotropy: false,
+        internalFormat: gl.RGBA8,
+        levels: 1,  // in case not working, change to 1
+        filter: gl.LINEAR,
+        wrap: gl.CLAMP_TO_EDGE,
+    },
+    );
+
+    // doing this in an update, because I don't think source is set-able in createTexture()
+    glance.updateTexture(
+        gl,
+        overlayTexture,
+        textCanvas,
+        {
+            flipY: true
+        }
+    )
+
+    const overlayDrawCall = glance.createDrawCall(gl, overlayShader, overlayVAO, {
+    uniforms: {},
+    textures: [
+        [0, overlayTexture],
+    ],
+    cullFace: gl.NONE,
+    depthTest: gl.NONE,
+    });
+    // Frame buffer
+    const overlayDepth = gl.createRenderbuffer();
+    gl.bindRenderbuffer(gl.RENDERBUFFER, overlayDepth);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, textCanvas.width, textCanvas.height);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+
+    const overlayFramebuffer = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, overlayFramebuffer);
+    gl.framebufferTexture2D(
+        gl.FRAMEBUFFER,
+        gl.COLOR_ATTACHMENT0,
+        gl.TEXTURE_2D,
+        overlayTexture.glObject,
+    /* level= */ 0,
+    );
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, overlayDepth);
+    let fbStatus = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (fbStatus !== gl.FRAMEBUFFER_COMPLETE)
+    {
+        throw new Error("Framebuffer incomplete");
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    setRenderLoop((time) => {
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, overlayFramebuffer);
+        gl.viewport(0, 0, textCanvas.width, textCanvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        glance.performDrawCall(gl, greenBoxDrawCall, time);
+
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, textCanvas.width, textCanvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+        glance.performDrawCall(gl, overlayDrawCall, time);
+    });
+
+</script>
+
+</html>
