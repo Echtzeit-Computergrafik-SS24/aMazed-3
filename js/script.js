@@ -88,7 +88,7 @@ const cameraMaxDistance = 10.0;
 // Light settings
 const lightProjection = Mat4.ortho(-1, 1, -1, 1, 0.01, 3);
 const lightDirection = new Vec3(0, 0, 0).normalize();
-const lightDistance = 1.4;
+const lightDistance = 1.5;
 
 // Canvas for the time display
 const overlayCanvas = document.createElement('canvas');
@@ -790,8 +790,9 @@ function drawStartScreen(time) {
   overlayCanvasCtx.fillStyle = `rgba(255, 255, 255, 255)`;
   overlayCanvasCtx.textAlign = "left";
   overlayCanvasCtx.font = '3vw sans-serif';
-  overlayCanvasCtx.fillText("Controls", offset[0], overlayCanvas.height-offset[1] - 10*offset[1]);
-  overlayCanvasCtx.fillText("Move camera: WASD / Mouse", offset[0], overlayCanvas.height-offset[1] - 5*offset[1]);
+  overlayCanvasCtx.fillText("Controls", offset[0], overlayCanvas.height-offset[1] - 12*offset[1]);
+  overlayCanvasCtx.fillText("Move camera: WASDQE / Mouse", offset[0], overlayCanvas.height-offset[1] - 8*offset[1]);
+  overlayCanvasCtx.fillText("Reset camera: R", offset[0], overlayCanvas.height-offset[1] - 4.5*offset[1]);
   overlayCanvasCtx.fillText("Move player: Arrow keys", offset[0], overlayCanvas.height-offset[1] - offset[1]);
 
   glance.updateTexture(

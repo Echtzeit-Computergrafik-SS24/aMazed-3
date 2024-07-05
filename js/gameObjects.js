@@ -149,8 +149,6 @@ class MazeCube extends Cube {
     constructor(geo, modelMatrix, size, numSegments, labyrinth) {
         super(geo, modelMatrix, size, numSegments);
         this.labyrinth = labyrinth;
-        console.log("labyrinth", labyrinth)
-
     }
     static create(modelMatrix, size, numberOfSegments) {
         let cube = Cube.create(modelMatrix, size, numberOfSegments);
