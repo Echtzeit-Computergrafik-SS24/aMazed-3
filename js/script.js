@@ -91,10 +91,10 @@ const lightDirection = new Vec3(0, 0, 0).normalize();
 const lightDistance = 1.4;
 
 // Canvas for the time display
-const timeDisplay = document.createElement('canvas');
-timeDisplay.width = glCanvas.width;
-timeDisplay.height = glCanvas.height;
-const timeDisplayCtx = timeDisplay.getContext('2d');
+const overlayCanvas = document.createElement('canvas');
+overlayCanvas.width = glCanvas.width;
+overlayCanvas.height = glCanvas.height;
+const overlayCanvasCtx = overlayCanvas.getContext('2d');
 function msToTime(s) {
   function pad(n, z) {
     z = z || 2;
@@ -110,9 +110,29 @@ function msToTime(s) {
   return pad(mins) + ':' + pad(secs);
 }
 
+
+
 // #endregion Constants ================================================
 
 // #region Game State ==================================================
+// States
+let gameStarted = false;
+let gameRunning = false;
+let generalStartTime = Date.now();
+let gameStartTime = null;
+let finalTime = null;
+function gameWonCallback() {
+  gameRunning = false;
+  console.log("You won!")
+}
+function setFinalTime(time) {
+  if (finalTime === null)
+  {
+    console.log("called")
+    finalTime = time;
+  }
+}
+
 // Camera
 let viewDist = cameraStartDistance;
 let viewPan = cameraStartAngle[0];
@@ -126,16 +146,19 @@ let viewRotationMatrix;
 let viewMatrix;
 const viewPos = Vec3.zero();
 
+
 // Light
 const lightPos = Vec3.zero();
 const lightXform = Mat4.identity();
 
 onMouseDrag((e) => {
+  if (!gameRunning) return;
   viewPan += e.movementX * -0.01;
   viewTilt += e.movementY * -0.01;
 });
 
 onMouseWheel((e) => {
+  if (!gameRunning) return;
   viewDist = Math.max(
     cameraMinDistance,
     Math.min(cameraMaxDistance, viewDist * (1 + Math.sign(e.deltaY) * 0.2))
@@ -143,54 +166,90 @@ onMouseWheel((e) => {
 });
 
 onKeyDown((e) =>
+  // God forgive these ugly ifs
   {
-      if (e.key == "a") {
-          panDelta = Math.max(panDelta - 1, -1);
-      }
-      if (e.key == "d") {
-          panDelta = Math.min(panDelta + 1, 1);
-      }
-      if (e.key == "w") {
-          tiltDelta = Math.max(tiltDelta - 1, -1);
-      }
-      if (e.key == "s") {
-          tiltDelta = Math.min(tiltDelta + 1, 1);
-      }
-      if (e.key == "q") {
-          rollDelta = Math.min(rollDelta + 1, 1);
-      }
-      if (e.key == "e") {
-          rollDelta = Math.max(rollDelta - 1, -1);
-      }
-      if (e.key == "r") {
+    if (!gameStarted){
+        if (e.key === " ") {
+          gameStarted = true;
+          gameRunning = true;
+          gameStartTime = Date.now();
           viewDist = cameraStartDistance;
           viewPan = cameraStartAngle[0];
           viewTilt = cameraStartAngle[1];
-          viewRoll = 0.;
-      }
+          viewRoll = 0;
+          panDelta = 0;
+          tiltDelta = 0;
+          rollDelta = 0;
+        }
+    }
+    else if (gameRunning)
+    {
+    switch (e.key) {
+      case "a":
+        panDelta = Math.max(panDelta - 1, -1);
+        break;
+      case "d":
+        panDelta = Math.min(panDelta + 1, 1);
+        break;
+      case "w":
+        tiltDelta = Math.max(tiltDelta - 1, -1);
+        break;
+      case "s":
+        tiltDelta = Math.min(tiltDelta + 1, 1);
+        break;
+      case "q":
+        rollDelta = Math.min(rollDelta + 1, 1);
+        break;
+      case "e":
+        rollDelta = Math.max(rollDelta - 1, -1);
+        break;
+      case "r":
+        viewDist = cameraStartDistance;
+        viewPan = cameraStartAngle[0];
+        viewTilt = cameraStartAngle[1];
+        viewRoll = 0.;
+        break;
+      case "ArrowUp":
+        if (!gameStarted) return;
+        playerCube.moveForward();
+        break;
+      case "ArrowDown":
+        playerCube.moveBackward();
+        break;
+      case "ArrowRight":
+        playerCube.moveRight();
+        break;
+      case "ArrowLeft":
+        playerCube.moveLeft();
+        break;
+      }    
+    }
   });
   
-  onKeyUp((e) =>
-  {
-      if (e.key == "a") {
-          panDelta = Math.min(panDelta + 1, 1);
-      }
-      if (e.key == "d") {
-          panDelta = Math.max(panDelta - 1, -1);
-      }
-      if (e.key == "w") {
-          tiltDelta = Math.min(tiltDelta + 1, 1);
-      }
-      if (e.key == "s") {
-          tiltDelta = Math.max(tiltDelta - 1, -1);
-      }
-      if (e.key == "q") {
-          rollDelta = Math.max(rollDelta - 1, -1);
-      }
-      if (e.key == "e") {
-          rollDelta = Math.min(rollDelta + 1, 1);
-      }
-  });
+onKeyUp((e) =>
+{
+  if (!gameRunning) return;
+  switch (e.key) {
+    case "a":
+      panDelta = Math.min(panDelta + 1, 1);
+      break;
+    case "d":
+      panDelta = Math.max(panDelta - 1, -1);
+      break;
+    case "w":
+      tiltDelta = Math.min(tiltDelta + 1, 1);
+      break;
+    case "s":
+      tiltDelta = Math.max(tiltDelta - 1, -1);
+      break;
+    case "q":
+      rollDelta = Math.max(rollDelta - 1, -1);
+      break;
+    case "e":
+      rollDelta = Math.min(rollDelta + 1, 1);
+      break;
+  }  
+});
 
 /// Resizing the viewport will update the projection matrix
 const projectionMatrix = Mat4.perspective(
@@ -209,23 +268,6 @@ onResize(() => {
   );
 });
 
-// movement bindings
-document.addEventListener("keydown", (event) => {
-  switch (event.key) {
-    case "ArrowUp":
-      playerCube.moveForward();
-      break;
-    case "ArrowDown":
-      playerCube.moveBackward();
-      break;
-    case "ArrowRight":
-      playerCube.moveRight();
-      break;
-    case "ArrowLeft":
-      playerCube.moveLeft();
-      break;
-  }
-});
 
 // #endregion Game State ===============================================
 
@@ -553,7 +595,7 @@ const mazeShader = glance.createShader(
 );
 
 // Create the maze cube
-const numberOfSegments = 21; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const numberOfSegments = 11; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
 const mazeCube = MazeCube.create(
   glance.Mat4.identity(),
@@ -631,7 +673,7 @@ const playerShader = glance.createShader(
 const side = 0;
 const nthSegment = 5;
 
-const playerCube = Player.create(mazeCube, side, nthSegment, numberOfSegments);
+const playerCube = Player.create(mazeCube, side, nthSegment, numberOfSegments, gameWonCallback);
 
 // Prep playerCube
 const playerIBO = glance.createIndexBuffer(gl, playerCube.geo.indices);
@@ -686,8 +728,75 @@ const skyboxTexture = await glance.loadCubemapNow(gl, "skybox-texture", [
 // #endregion Skybox ----------------------------------------------------
 
 // #region Time Display -----------------------------------------------
+function drawStartScreen(time) {
+  // Sorry about the magic numbers
+  let middle = [Math.floor(overlayCanvas.width/2), Math.floor(overlayCanvas.height/2)];
+  let offset = [Math.floor(overlayCanvas.width*0.02), Math.floor(overlayCanvas.height*0.02)];
 
+  overlayCanvasCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  const alpha = Math.abs(Math.sin(time / 1000));
+  overlayCanvasCtx.fillStyle = `rgba(0, 0, 0, 0)`;
+  overlayCanvasCtx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayCanvasCtx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  overlayCanvasCtx.textAlign = "center";
+  overlayCanvasCtx.font = '5vw sans-serif';
+  overlayCanvasCtx.fillText("Press space to start", middle[0], middle[1]);
 
+  // Controls description
+  overlayCanvasCtx.fillStyle = `rgba(255, 255, 255, 255)`;
+  overlayCanvasCtx.textAlign = "left";
+  overlayCanvasCtx.font = '3vw sans-serif';
+  overlayCanvasCtx.fillText("Controls", offset[0], overlayCanvas.height-offset[1] - 10*offset[1]);
+  overlayCanvasCtx.fillText("Move camera: WASD / Mouse", offset[0], overlayCanvas.height-offset[1] - 5*offset[1]);
+  overlayCanvasCtx.fillText("Move player: Arrow keys", offset[0], overlayCanvas.height-offset[1] - offset[1]);
+
+  glance.updateTexture(
+    gl,
+    overlayTexture,
+    overlayCanvas,
+    {flipY: true}
+  )
+}
+
+function drawEndScreen(time) {
+  let middle = [Math.floor(overlayCanvas.width/2), Math.floor(overlayCanvas.height/2)];
+  let offset = [Math.floor(overlayCanvas.width/10), Math.floor(overlayCanvas.height/10)];
+
+  overlayCanvasCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  const alpha = Math.abs(Math.sin(time / 1000));
+  overlayCanvasCtx.fillStyle = `rgba(0, 0, 0, 0)`;
+  overlayCanvasCtx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayCanvasCtx.fillStyle = `rgba(255, 255, 255, 255)`;
+  overlayCanvasCtx.textAlign = "center";
+  overlayCanvasCtx.font = '5vw sans-serif';
+  overlayCanvasCtx.fillText(`Congrats! A-Maze-ing work!`, middle[0], middle[1]);
+  overlayCanvasCtx.fillText(`Your time: ${msToTime(finalTime)}`, middle[0], middle[1] + 1*offset[1]);
+  overlayCanvasCtx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+  overlayCanvasCtx.fillText(`Reload to play again`, middle[0], middle[1] + 2*offset[1]);
+  glance.updateTexture(
+    gl,
+    overlayTexture,
+    overlayCanvas,
+    {flipY: true}
+  )
+}
+
+function drawTimeDisplay(time) {
+  // Update the time display
+  overlayCanvasCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayCanvasCtx.fillStyle = 'rgba(0, 0, 0, 0)';
+  overlayCanvasCtx.fillRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+  overlayCanvasCtx.fillStyle = 'white';
+  overlayCanvasCtx.textAlign = "center";
+  overlayCanvasCtx.font = '5vw sans-serif';
+  overlayCanvasCtx.fillText(msToTime(time), Math.floor(overlayCanvas.width/10), Math.floor(overlayCanvas.height/10));
+  glance.updateTexture(
+    gl,
+    overlayTexture,
+    overlayCanvas,
+    {flipY: true}
+  )
+}
 
 
 const overlayShader = glance.createShader(gl, "overlay-shader", overlayVSSource, overlayFSSource, {
@@ -709,8 +818,8 @@ const overlayVAO = glance.createVAO(gl, "overlay-vao", overlayIBO, glance.buildA
 const overlayTexture = glance.createTexture(
   gl,
   "color-target",
-  timeDisplay.width,
-  timeDisplay.height,
+  overlayCanvas.width,
+  overlayCanvas.height,
   gl.TEXTURE_2D,
   null,
   {
@@ -722,20 +831,11 @@ const overlayTexture = glance.createTexture(
   },
 );
 
-// doing this in an update, because I don't think source is set-able in createTexture()
-glance.updateTexture(
-  gl,
-  overlayTexture,
-  timeDisplay,
-  {flipY: true}
-)
-
-
 const postTexture = glance.createTexture(
   gl,
   "color-target",
-  timeDisplay.width,
-  timeDisplay.height,
+  overlayCanvas.width,
+  overlayCanvas.height,
   gl.TEXTURE_2D,
   null,
   {
@@ -862,7 +962,7 @@ const overlayDrawCall = glance.createDrawCall(gl, overlayShader, overlayVAO, {
 // #region Time Display Frame Buffer ================================================
 const overlayDepth = gl.createRenderbuffer();
 gl.bindRenderbuffer(gl.RENDERBUFFER, overlayDepth);
-gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, timeDisplay.width, timeDisplay.height);
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, overlayCanvas.width, overlayCanvas.height);
 gl.bindRenderbuffer(gl.RENDERBUFFER, null);
 
 const overlayFramebuffer = gl.createFramebuffer();
@@ -885,11 +985,28 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 // #endregion Time Display Frame Buffer ================================================
 
 
-
 // #region Render Loop =================================================
 const framebufferStack = new glance.FramebufferStack();
 setRenderLoop((time) => {
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  
+  let timeSinceStart = time - (gameStartTime - generalStartTime);
+  if (gameStarted && !gameRunning) {
+    setFinalTime(timeSinceStart);
+    drawEndScreen(timeSinceStart);
+    panDelta = 0.01;
+    tiltDelta = 0.01;
+    rollDelta = 0.02;
+  }
+  else if (!gameStarted) {
+    drawStartScreen(time);
+    panDelta = 0.01;
+    tiltDelta = 0.01;
+    rollDelta = 0.02;
+  }
+  else if (gameRunning){
+    drawTimeDisplay(timeSinceStart);
+  }
 
   // Update the user camera
   viewRotationMatrix = (Mat4.fromRotation(new Vec3(0, 1, 0), viewPan).mul(
@@ -907,20 +1024,6 @@ setRenderLoop((time) => {
     viewTilt += tiltDelta * 0.02;
     viewRoll += rollDelta * 0.02;
   }
-
-  // Update the time display
-  timeDisplayCtx.clearRect(0, 0, timeDisplay.width, timeDisplay.height);
-  timeDisplayCtx.fillStyle = 'rgba(0, 0, 0, 0)';
-  timeDisplayCtx.fillRect(0, 0, timeDisplay.width, timeDisplay.height);
-  timeDisplayCtx.fillStyle = 'white';
-  timeDisplayCtx.font = '60px sans-serif';
-  timeDisplayCtx.fillText(msToTime(time), Math.floor(timeDisplay.width/10), Math.floor(timeDisplay.height/10));
-  glance.updateTexture(
-    gl,
-    overlayTexture,
-    timeDisplay,
-    {flipY: true}
-  )
 
   // Update the light position
   const playerPos = new Vec3(
@@ -947,7 +1050,7 @@ setRenderLoop((time) => {
 
   // Render the scene
   gl.bindFramebuffer(gl.FRAMEBUFFER, overlayFramebuffer);
-  gl.viewport(0, 0, timeDisplay.width, timeDisplay.height);
+  gl.viewport(0, 0, overlayCanvas.width, overlayCanvas.height);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   glance.performDrawCall(gl, skyboxDrawCall, time);
