@@ -82,7 +82,7 @@ const farPlane = 14;
 
 const cameraStartAngle = [0., 0.];
 const cameraStartDistance = 3.5;
-const cameraMinDistance = 0.6;
+const cameraMinDistance = 0.8;
 const cameraMaxDistance = 10.0;
 
 // Light settings
