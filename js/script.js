@@ -123,12 +123,10 @@ let gameStartTime = null;
 let finalTime = null;
 function gameWonCallback() {
   gameRunning = false;
-  console.log("You won!")
 }
 function setFinalTime(time) {
   if (finalTime === null)
   {
-    console.log("called")
     finalTime = time;
   }
 }
@@ -595,7 +593,7 @@ const mazeShader = glance.createShader(
 );
 
 // Create the maze cube
-const numberOfSegments = 11; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
+const numberOfSegments = 13 ; // should be uneven and > 5 -> otherwise conditions for labyrinth generation are not met
 const cubeSize = 1;
 const mazeCube = MazeCube.create(
   glance.Mat4.identity(),
@@ -669,11 +667,8 @@ const playerShader = glance.createShader(
   }
 );
 
-// Starting segment
-const side = 0;
-const nthSegment = 5;
 
-const playerCube = Player.create(mazeCube, side, nthSegment, numberOfSegments, gameWonCallback);
+const playerCube = Player.create(mazeCube, numberOfSegments, gameWonCallback);
 
 // Prep playerCube
 const playerIBO = glance.createIndexBuffer(gl, playerCube.geo.indices);
@@ -727,7 +722,56 @@ const skyboxTexture = await glance.loadCubemapNow(gl, "skybox-texture", [
 
 // #endregion Skybox ----------------------------------------------------
 
-// #region Time Display -----------------------------------------------
+// #endregion Geometry =================================================
+
+// #region Shadow Mapping ==============================================
+const shadowDepthTexture = glance.createTexture(
+  gl,
+  "shadow-depth",
+  2048,
+  2048,
+  gl.TEXTURE_2D,
+  null,
+  {
+    useAnisotropy: false,
+    internalFormat: gl.DEPTH_COMPONENT16,
+    levels: 1,
+    filter: gl.NEAREST,
+  }
+);
+
+const shadowShader = glance.createShader(
+  gl,
+  "shadow-shader",
+  shadowVSSource,
+  shadowFSSource,
+  {
+    u_lightProjection: lightProjection,
+  }
+);
+
+const shadowFramebuffer = glance.createFramebuffer(
+  gl,
+  "shadow-framebuffer",
+  null,
+  shadowDepthTexture
+);
+
+const shadowDrawCalls = [
+  glance.createDrawCall(gl, shadowShader, mazeVAO, {
+    uniforms: {
+      u_modelMatrix: () => Mat4.identity(),
+      u_lightXform: () => lightXform,
+    },
+    cullFace: gl.BACK,
+    depthTest: gl.LESS,
+  }),
+];
+
+// #endregion Shadow Mapping ===========================================
+
+// #region Overlay =====================================================
+
 function drawStartScreen(time) {
   // Sorry about the magic numbers
   let middle = [Math.floor(overlayCanvas.width/2), Math.floor(overlayCanvas.height/2)];
@@ -798,7 +842,6 @@ function drawTimeDisplay(time) {
   )
 }
 
-
 const overlayShader = glance.createShader(gl, "overlay-shader", overlayVSSource, overlayFSSource, {
   u_texture: 0,
   u_textLayer: 1,
@@ -845,55 +888,7 @@ const postTexture = glance.createTexture(
   },
 );
 
-// #endregion Time Display --------------------------------------------
-
-// #endregion Geometry =================================================
-
-// #region Shadow Mapping ==============================================
-const shadowDepthTexture = glance.createTexture(
-  gl,
-  "shadow-depth",
-  2048,
-  2048,
-  gl.TEXTURE_2D,
-  null,
-  {
-    useAnisotropy: false,
-    internalFormat: gl.DEPTH_COMPONENT16,
-    levels: 1,
-    filter: gl.NEAREST,
-  }
-);
-
-const shadowShader = glance.createShader(
-  gl,
-  "shadow-shader",
-  shadowVSSource,
-  shadowFSSource,
-  {
-    u_lightProjection: lightProjection,
-  }
-);
-
-const shadowFramebuffer = glance.createFramebuffer(
-  gl,
-  "shadow-framebuffer",
-  null,
-  shadowDepthTexture
-);
-
-const shadowDrawCalls = [
-  glance.createDrawCall(gl, shadowShader, mazeVAO, {
-    uniforms: {
-      u_modelMatrix: () => Mat4.identity(),
-      u_lightXform: () => lightXform,
-    },
-    cullFace: gl.BACK,
-    depthTest: gl.LESS,
-  }),
-];
-
-// #endregion Shadow Mapping ===========================================
+// #endregion Overlay ==================================================
 
 // #region Draw calls ==================================================
 // #region Maze draw call ------------------------------------------------------
@@ -942,7 +937,7 @@ const skyboxDrawCall = glance.createDrawCall(gl, skyboxShader, skyboxVAO, {
   depthTest: gl.LEQUAL,
 });
 // #endregion Skybox draw call ----------------------------------------------------
-// #region Time Display draw call ----------------------------------------------------
+// #region Overlay draw call ----------------------------------------------------
 const overlayDrawCall = glance.createDrawCall(gl, overlayShader, overlayVAO, {
   uniforms: {
 
@@ -959,7 +954,7 @@ const overlayDrawCall = glance.createDrawCall(gl, overlayShader, overlayVAO, {
 // #endregion Time Display draw call ----------------------------------------------------
 // #endregion Draw calls ===============================================
 
-// #region Time Display Frame Buffer ================================================
+// #region Overlay Frame Buffer ================================================
 const overlayDepth = gl.createRenderbuffer();
 gl.bindRenderbuffer(gl.RENDERBUFFER, overlayDepth);
 gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, overlayCanvas.width, overlayCanvas.height);

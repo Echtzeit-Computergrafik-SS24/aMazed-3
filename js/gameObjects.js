@@ -175,7 +175,7 @@ class Player extends Cube {
         this.moving = false;
         this.gameWonCallback = gameWonCallback;
     }
-    static create(mazeCube, side, nthSegment, numSegments, gameWonCallback) {
+    static create(mazeCube, numSegments, gameWonCallback) {
         let size = mazeCube.size / mazeCube.numSegments;
         let geo = glance.createBox('player-geo', {
             width: size,
@@ -186,8 +186,6 @@ class Player extends Cube {
             depthSegments: numSegments
         });
         let player = new Player(geo, glance.Mat4.identity(), size, numSegments, mazeCube, gameWonCallback);
-        player.side = side;
-        player.nthSegment = nthSegment;
 
         player.initSegment();
         player.initModelMatrix();
@@ -374,6 +372,5 @@ class Player extends Cube {
     }
 
 }
-
 
 
