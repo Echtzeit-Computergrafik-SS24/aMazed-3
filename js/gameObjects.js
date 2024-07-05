@@ -253,8 +253,8 @@ class Player extends Cube {
         }
 
     }
-    isNotWall(side, coord) {
-        return this.parent.labyrinth[side].some(entry => entry[0] === coord[0] && entry[1] === coord[1]);
+    isWall(side, coord) {
+        return !this.parent.labyrinth[side].some(entry => entry[0] === coord[0] && entry[1] === coord[1]);
     }
     move(direction, rotAxis) {
         if (this.moving) return;
@@ -267,12 +267,12 @@ class Player extends Cube {
         // calc what the position would be
         let segCenter = startingSegment.center.clone()
         let pos = segCenter.add(this.currSegment.normal.clone().scale(this.size/2))
-        let segment = this.getSegmentByPos(pos.add(offset));  // get the segment pos with updated positions
+        let segment = this.getSegmentByPos(pos.add(offset));
         let converted = convertSegmentToXY(segment[3], this.parent.numSegments)
         let edge = false;
         let animationDirection = direction.clone()
 
-        if (!this.isNotWall(segment[2], converted)) {
+        if (this.isWall(segment[2], converted)) {
             this.moving = false;
             return;
         }
